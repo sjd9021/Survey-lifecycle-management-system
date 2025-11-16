@@ -1,5 +1,3 @@
-import { google } from "googleapis";
-
 export interface EmailMessage {
   from: string;
   to: string[];
@@ -20,21 +18,25 @@ export class EmailProcessor {
    * Fetch an email thread from Gmail using Composio actions
    */
   async fetchThread(threadId: string, userId: string = "replit"): Promise<NormalizedThread> {
+    if (!process.env.COMPOSIO_API_KEY) {
+      throw new Error("COMPOSIO_API_KEY not configured");
+    }
+
     try {
       const { Composio } = await import("@composio/core");
       const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
       
-      // Use Composio action to fetch thread
-      const result = await composio.actions.execute(
-        userId,
-        "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
-        {
+      // Use Composio action to fetch thread (v3 SDK object signature)
+      const result = await composio.actions.execute({
+        actionName: "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
+        userId: userId,
+        params: {
           thread_id: threadId,
           user_id: "me",
-        }
-      );
+        },
+      });
 
-      if (!result.data) {
+      if (!result?.data) {
         throw new Error("No thread data received from Composio");
       }
 
@@ -47,20 +49,33 @@ export class EmailProcessor {
   }
 
   /**
-   * List recent messages from a mailbox
+   * List recent messages from a mailbox using Composio
    */
-  async listMessages(query?: string, maxResults: number = 10): Promise<any[]> {
+  async listMessages(query?: string, maxResults: number = 10, userId: string = "replit"): Promise<any[]> {
+    if (!process.env.COMPOSIO_API_KEY) {
+      throw new Error("COMPOSIO_API_KEY not configured");
+    }
+
     try {
-      const { getUncachableGmailClient } = await import("./gmailClient");
-      const gmail = await getUncachableGmailClient();
+      const { Composio } = await import("@composio/core");
+      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
       
-      const response = await gmail.users.messages.list({
-        userId: "me",
-        q: query || "",
-        maxResults: maxResults,
+      // Use Composio action to fetch emails (v3 SDK object signature)
+      const result = await composio.actions.execute({
+        actionName: "GMAIL_FETCH_EMAILS",
+        userId: userId,
+        params: {
+          query: query || "",
+          max_results: maxResults,
+          user_id: "me",
+        },
       });
 
-      return response.data.messages || [];
+      console.log("Gmail fetch result:", JSON.stringify(result, null, 2));
+      
+      // Handle Composio response structure (may be under result.data or result.response)
+      const messages = result?.data?.messages || result?.response?.messages || [];
+      return messages;
     } catch (error) {
       console.error("Error listing messages:", error);
       throw new Error(`Failed to list messages: ${error}`);
