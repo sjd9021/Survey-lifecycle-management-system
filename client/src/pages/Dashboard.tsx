@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { Claim } from "@shared/schema";
+import type { ClaimStatus } from "@/components/StatusBadge";
 
 export default function Dashboard() {
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
@@ -15,111 +18,91 @@ export default function Dashboard() {
     statuses: [],
   });
 
-  const mockClaims: ClaimData[] = [
-    {
-      id: "1",
-      gladstoneRef: "G/1829/25G",
-      clientRefs: ["BL MAEU260730677", "PI 9610232-2", "MENAC-193509"],
-      notificationDate: new Date("2025-11-14"),
-      surveyDate: new Date("2025-11-14"),
-      plaDate: new Date("2025-11-15"),
-      status: "PLA_SENT",
-      branch: "Mumbai",
-      insurer: "Marsh",
-      consignee: "Emirates Float Glass LLC",
-    },
-    {
-      id: "2",
-      gladstoneRef: "G/1812/25B",
-      clientRefs: ["21-H0965963"],
-      notificationDate: new Date("2025-11-11"),
-      surveyDate: new Date("2025-11-12"),
-      plaDate: null,
-      status: "SURVEY_SCHEDULED",
-      branch: "Mumbai",
-      insurer: "TKY Japan",
-      consignee: "Rishichem Distributors",
-    },
-    {
-      id: "3",
-      gladstoneRef: "G/1804/25B",
-      clientRefs: ["A 301630641 CGO"],
-      notificationDate: new Date("2025-11-07"),
-      surveyDate: new Date("2025-11-10"),
-      plaDate: null,
-      status: "OVERDUE",
-      branch: "Mumbai",
-      insurer: "MSIG Singapore",
-      consignee: "V3 Agencies",
-    },
-    {
-      id: "4",
-      gladstoneRef: "G/1796/25B",
-      clientRefs: ["BL OOLU2763062180"],
-      notificationDate: new Date("2025-11-06"),
-      surveyDate: new Date("2025-11-10"),
-      plaDate: null,
-      status: "SURVEY_SCHEDULED",
-      branch: "Mumbai",
-      insurer: "WK Webster",
-      consignee: "LG Electronics India",
-    },
-    {
-      id: "5",
-      gladstoneRef: "G/1802/25B",
-      clientRefs: ["AQID61024225QAAASUSH"],
-      notificationDate: new Date("2025-11-07"),
-      surveyDate: new Date("2025-11-13"),
-      plaDate: null,
-      status: "SURVEY_SCHEDULED",
-      branch: "Mumbai",
-      insurer: "CPIC",
-      consignee: "Marica Agronomics Pvt. Ltd",
-    },
-  ];
+  // Fetch claims from API
+  const { data: claims = [], isLoading: claimsLoading } = useQuery<Claim[]>({
+    queryKey: ["/api/claims"],
+  });
 
-  const mockClaimDetail: ClaimDetails = {
-    id: selectedClaimId || "",
-    gladstoneRef: mockClaims.find((c) => c.id === selectedClaimId)?.gladstoneRef || "",
-    clientRefs: mockClaims.find((c) => c.id === selectedClaimId)?.clientRefs || [],
-    notificationDate: mockClaims.find((c) => c.id === selectedClaimId)?.notificationDate || null,
-    surveyDate: mockClaims.find((c) => c.id === selectedClaimId)?.surveyDate || null,
-    surveyDateFixedAt: new Date("2025-11-12T16:57:00"),
-    plaDate: mockClaims.find((c) => c.id === selectedClaimId)?.plaDate || null,
-    status: mockClaims.find((c) => c.id === selectedClaimId)?.status || "NOTIFIED",
-    branch: mockClaims.find((c) => c.id === selectedClaimId)?.branch,
-    insurer: mockClaims.find((c) => c.id === selectedClaimId)?.insurer,
-    consignee: mockClaims.find((c) => c.id === selectedClaimId)?.consignee,
-    commodity: "Bronze Tinted Glass",
-    emailThreads: [
-      {
-        id: "1",
-        from: "n.jatia@gladstone.co.in",
-        to: ["mumbai@gladstone.co.in"],
-        date: new Date("2025-11-14T10:30:00"),
-        subject: "New survey notification",
-        snippet: "Dilip, new survey near location. Please ensure notice of loss is properly served...",
-      },
-    ],
-  };
+  // Fetch stats from API
+  const { data: stats = {
+    total: 0,
+    notified: 0,
+    surveyScheduled: 0,
+    plaSent: 0,
+    overdue: 0
+  }, isLoading: statsLoading } = useQuery<{
+    total: number;
+    notified: number;
+    surveyScheduled: number;
+    plaSent: number;
+    overdue: number;
+  }>({
+    queryKey: ["/api/stats"],
+  });
 
-  const stats = {
-    total: mockClaims.length,
-    scheduled: mockClaims.filter((c) => c.status === "SURVEY_SCHEDULED").length,
-    plaSent: mockClaims.filter((c) => c.status === "PLA_SENT").length,
-    overdue: mockClaims.filter((c) => c.status === "OVERDUE").length,
-  };
+  // Fetch selected claim details
+  const { data: selectedClaim } = useQuery<Claim>({
+    queryKey: ["/api/claims", selectedClaimId],
+    enabled: !!selectedClaimId,
+  });
+
+  // Convert database claims to table format
+  const tableData: ClaimData[] = claims.map((claim) => ({
+    id: claim.id,
+    gladstoneRef: claim.gladstoneRef,
+    clientRefs: claim.clientRefs || [],
+    notificationDate: claim.notificationReceivedAt ? new Date(claim.notificationReceivedAt) : null,
+    surveyDate: claim.surveyDate ? new Date(claim.surveyDate) : null,
+    plaDate: claim.plaSentToRonnieAt ? new Date(claim.plaSentToRonnieAt) : null,
+    status: claim.status as ClaimStatus,
+    branch: claim.branch || undefined,
+    insurer: claim.insurer || undefined,
+    consignee: claim.consignee || undefined,
+  }));
+
+  // Convert selected claim to detail format
+  const claimDetail: ClaimDetails | null = selectedClaim
+    ? {
+        id: selectedClaim.id,
+        gladstoneRef: selectedClaim.gladstoneRef,
+        clientRefs: selectedClaim.clientRefs || [],
+        notificationDate: selectedClaim.notificationReceivedAt
+          ? new Date(selectedClaim.notificationReceivedAt)
+          : null,
+        surveyDate: selectedClaim.surveyDate ? new Date(selectedClaim.surveyDate) : null,
+        surveyDateFixedAt: selectedClaim.surveyDateFixedAt
+          ? new Date(selectedClaim.surveyDateFixedAt)
+          : null,
+        plaDate: selectedClaim.plaSentToRonnieAt ? new Date(selectedClaim.plaSentToRonnieAt) : null,
+        status: selectedClaim.status as ClaimStatus,
+        branch: selectedClaim.branch || undefined,
+        insurer: selectedClaim.insurer || undefined,
+        consignee: selectedClaim.consignee || undefined,
+        commodity: selectedClaim.commodity || undefined,
+        emailThreads: [], // TODO: Add email threads when available
+      }
+    : null;
+
+  if (claimsLoading || statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading claims...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatsCard label="Total Claims" value={stats.total} trend={{ value: 12, direction: "up" }} />
-        <StatsCard label="Survey Scheduled" value={stats.scheduled} />
-        <StatsCard label="Overdue" value={stats.overdue} trend={{ value: 8, direction: "down" }} />
+        <StatsCard label="Total Claims" value={stats.total} />
+        <StatsCard label="Survey Scheduled" value={stats.surveyScheduled} />
+        <StatsCard label="Overdue" value={stats.overdue} />
       </div>
 
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Recent Claims</h2>
+        <h2 className="text-2xl font-semibold">
+          {tableData.length === 0 ? "No Claims Yet" : "Recent Claims"}
+        </h2>
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" data-testid="button-open-filters">
@@ -137,10 +120,22 @@ export default function Dashboard() {
         </Sheet>
       </div>
 
-      <ClaimsTable claims={mockClaims} onViewDetails={(id) => setSelectedClaimId(id)} />
+      {tableData.length === 0 ? (
+        <div className="border rounded-md p-12 text-center">
+          <p className="text-muted-foreground mb-4">
+            No claims in the system yet. Process an email thread to get started.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Use the <code className="bg-muted px-2 py-1 rounded">/api/process-thread</code> endpoint to
+            process email threads.
+          </p>
+        </div>
+      ) : (
+        <ClaimsTable claims={tableData} onViewDetails={(id) => setSelectedClaimId(id)} />
+      )}
 
       <ClaimDetailModal
-        claim={selectedClaimId ? mockClaimDetail : null}
+        claim={claimDetail}
         open={!!selectedClaimId}
         onClose={() => setSelectedClaimId(null)}
       />

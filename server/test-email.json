@@ -1,0 +1,68 @@
+{
+  "id": "test-thread-1",
+  "messages": [
+    {
+      "id": "msg1",
+      "internalDate": "1730961000000",
+      "payload": {
+        "headers": [
+          { "name": "From", "value": "Nilesh Jatia <n.jatia@gladstone.co.in>" },
+          { "name": "To", "value": "mumbai@gladstone.co.in" },
+          { "name": "Subject", "value": "Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406" },
+          { "name": "Date", "value": "Wed, 6 Nov 2025 19:10:16 +0530" }
+        ],
+        "body": {
+          "data": "TmV3IHRva2lvIHN1cnZleS4KQ29uZmlybS4="
+        }
+      }
+    },
+    {
+      "id": "msg2",
+      "internalDate": "1731068220000",
+      "payload": {
+        "headers": [
+          { "name": "From", "value": "Gladstone Mumbai <mumbai@gladstone.co.in>" },
+          { "name": "To", "value": "Nilesh Jatia <n.jatia@gladstone.co.in>" },
+          { "name": "Cc", "value": "Asha John <asha@gladstone.co.in>, Gladstone. Ronnie <ronnie@gladstone.co.in>, Pallavi Bhartiya <pallavi@gladstone.co.in>" },
+          { "name": "Subject", "value": "RE: Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406" },
+          { "name": "Date", "value": "Wed, 06 November 2025 08:37 PM" }
+        ],
+        "body": {
+          "data": "Tm90ZWQuCgpXaWxsIGNvbmZpcm0gdGhlIGRhdGUgb2Ygc3VydmV5IG9uY2UgZml4ZWQu"
+        }
+      }
+    },
+    {
+      "id": "msg3",
+      "internalDate": "1731326285000",
+      "payload": {
+        "headers": [
+          { "name": "From", "value": "Gladstone Mumbai <mumbai@gladstone.co.in>" },
+          { "name": "To", "value": "Nilesh Jatia <n.jatia@gladstone.co.in>" },
+          { "name": "Cc", "value": "Asha John <asha@gladstone.co.in>, Gladstone. Ronnie <ronnie@gladstone.co.in>" },
+          { "name": "Subject", "value": "RE: Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406" },
+          { "name": "Date", "value": "Fri, 08 November 2025 01:08:05 PM" }
+        ],
+        "body": {
+          "data": "UGxzIGZpbmQgZW5jbG9zZWQgZW1haWwgcmVjZWl2ZWQgZnJvbSBTb2ppdHogSW5kaWEgUHJpdmF0ZSBMaW1pdGVkIGNvbmZpcm1pbmcgdGhlIGRhdGUgb2Ygc3VydmV5IGZvciAxMCBOb3ZlbWJlciAyMDI1LgoKVGhleSBoYXZlIGFnYWluIHJlZnVzZWQgdG8gaXNzdWUgdGhlIE5PTCBmcm9tIHRoZWlyIHNpZGUuIFdlIHdpbGwgaXNzdWUgdGhlIGJpbmRpbmcgZW1haWwgZnJvbSBvdXIgc2lkZS4="
+        }
+      }
+    },
+    {
+      "id": "msg4",
+      "internalDate": "1730908091000",
+      "payload": {
+        "headers": [
+          { "name": "From", "value": "khanna.mahak <khanna.mahak@sojitz.com>" },
+          { "name": "To", "value": "info@gladstoneagencies.com" },
+          { "name": "Cc", "value": "arora.chanakya <c.arora@sojitz.com>, yonekawa.takuma <yonekawa.takuma@sojitz.com>" },
+          { "name": "Subject", "value": "Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406" },
+          { "name": "Date", "value": "November 6, 2025 5:28:11 PM" }
+        ],
+        "body": {
+          "data": "RGVhciBSZXNwZWN0aXZlLAoKR3JlZXRpbmdzIGZyb20gU29qaXR6IEluZGlhIFByaXZhdGUgTGltaXRlZCEKCldlIHdpc2ggdG8gaW5mb3JtIHlvdSB0aGF0IHVwb24gcmVjZWlwdCBvZiBvdXIgY2FyZ28gYXQgS2FuZGxhIFBvcnQuLCBLdXRjaCwgR3VqYXJhdCwgY2VydGFpbiBkYW1hZ2VzIHdlcmUgb2JzZXJ2ZWQgZHVyaW5nIHRoZSBpbml0aWFsIGluc3BlY3Rpb24uCgpUaGUgc2hpcG1lbnQgZGV0YWlscyBhcmUgYXMgZm9sbG93czoKLSBDb25zaWduZWU6IFNvaml0eiBNYWNoaW5lcnkgQ29ycG9yYXRpb24KLSBQb3J0IG9mIERpc2NoYXJnZTogS2FuZGxhIFBvcnQsIEt1dGNoLCBHdWphcmF0LCBJbmRpYQotIFZlc3NlbCAvIFZveWFnZSBObzoITVYuSEUgU0hFTkcgRE9ORyBGQU5HIFYuU1AyNTI3MQotIEJpbGwgb2YgTGFkaW5nIE5vOiAyNzFTSEtEMDEKLSBDb21tb2RpdHk6IFVzZWQgQmxhbmtpbmcgUHJlc3MgW0JMMTAwMFRdCi0gUG9saWN5IC8gQ292ZXIgTm90ZSBObzogMjEtSDA5NjM0MDYKCldlIHdhbnQgdG8gcmVxdWVzdCB0byBpbml0aWF0ZSBqb2ludCBzdXJ2ZXkgYWxvbmcgd2l0aCBwb3J0IGF1dGhvcml0aWVzIGFuZCBzaGlwcGluZyBsaW5lIHJlcHJlc2VudGF0aXZlcy4KCktpbmRseSBhY2tub3dsZWRnZSB0aGlzIGFzIG91ciBmaXJzdCBpbnRpbWF0aW9uIG9mIGNsYWltIHVuZGVyIHRoZSBhYm92ZSBwb2xpY3ku"
+        }
+      }
+    }
+  ]
+}
