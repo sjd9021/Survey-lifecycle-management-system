@@ -59,23 +59,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Webhook endpoint for Gmail triggers (future: requires Composio/Gmail OAuth setup)
-  app.post("/api/webhook/gmail", async (req, res) => {
+  // Webhook endpoint for Composio Gmail triggers (v3 SDK)
+  app.post("/api/webhook/composio", async (req, res) => {
     try {
-      const { threadId, messageId } = req.body;
+      const signature = req.headers["webhook-signature"] as string;
+      const webhookId = req.headers["webhook-id"] as string;
+      const timestamp = req.headers["webhook-timestamp"] as string;
 
-      console.log("Gmail webhook received:", { threadId, messageId });
-
-      // NOTE: This requires Gmail OAuth access token to fetch threads
-      // To implement: 
-      // 1. Set up Composio Gmail trigger or OAuth2 flow
-      // 2. Use emailProcessor.fetchThread(threadId) with valid access token
-      // 3. Process thread with claimProcessor.processEmailThread()
+      // Verify webhook signature for security
+      const { composioTriggerService } = await import("./services/composioTriggers");
+      const bodyStr = JSON.stringify(req.body);
       
+      if (!composioTriggerService.verifyWebhookSignature(signature, webhookId, timestamp, bodyStr)) {
+        console.warn("⚠️  Invalid webhook signature");
+        return res.status(401).json({ error: "Invalid signature" });
+      }
+
+      // Handle the trigger event
+      const result = await composioTriggerService.handleGmailWebhook(req.body);
+      
+      res.json({ status: "success", ...result });
+    } catch (error: any) {
+      console.error("Webhook error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Setup Gmail trigger for a user
+  app.post("/api/triggers/gmail/setup", async (req, res) => {
+    try {
+      const { userId, config } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: "userId required" });
+      }
+
+      const { composioTriggerService } = await import("./services/composioTriggers");
+      const trigger = await composioTriggerService.setupGmailTrigger(userId, config);
+
       res.json({ 
-        message: "Webhook endpoint ready. Gmail OAuth integration required for automatic processing.",
-        note: "Use /api/process-thread endpoint for manual testing with email thread data."
+        message: "Gmail trigger created successfully",
+        trigger,
+        webhookUrl: "Configure this in Composio dashboard: POST /api/webhook/composio"
       });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // List triggers for a user
+  app.get("/api/triggers/:userId", async (req, res) => {
+    try {
+      const { composioTriggerService } = await import("./services/composioTriggers");
+      const triggers = await composioTriggerService.listTriggers(req.params.userId);
+      res.json(triggers);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

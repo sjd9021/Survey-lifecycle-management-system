@@ -16,23 +16,15 @@ export interface NormalizedThread {
 }
 
 export class EmailProcessor {
-  private gmail: any;
-
-  constructor(accessToken?: string) {
-    // Initialize with OAuth2 client
-    const auth = new google.auth.OAuth2();
-    if (accessToken) {
-      auth.setCredentials({ access_token: accessToken });
-    }
-    this.gmail = google.gmail({ version: "v1", auth });
-  }
-
   /**
-   * Fetch an email thread from Gmail
+   * Fetch an email thread from Gmail using Replit integration
    */
   async fetchThread(threadId: string): Promise<NormalizedThread> {
     try {
-      const response = await this.gmail.users.threads.get({
+      const { getUncachableGmailClient } = await import("./gmailClient");
+      const gmail = await getUncachableGmailClient();
+      
+      const response = await gmail.users.threads.get({
         userId: "me",
         id: threadId,
         format: "full",
@@ -53,7 +45,10 @@ export class EmailProcessor {
    */
   async listMessages(query?: string, maxResults: number = 10): Promise<any[]> {
     try {
-      const response = await this.gmail.users.messages.list({
+      const { getUncachableGmailClient } = await import("./gmailClient");
+      const gmail = await getUncachableGmailClient();
+      
+      const response = await gmail.users.messages.list({
         userId: "me",
         q: query || "",
         maxResults: maxResults,
@@ -151,4 +146,5 @@ export class EmailProcessor {
   }
 }
 
+// Export singleton instance (no need for access token with Replit integration)
 export const emailProcessor = new EmailProcessor();
