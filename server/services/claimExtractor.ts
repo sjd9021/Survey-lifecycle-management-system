@@ -76,8 +76,11 @@ Return null if no Gladstone reference is found (not a claim email).`;
     const userPrompt = `Analyze this email thread and extract claim data:\n\n${threadJson}`;
 
     try {
+      console.log("🔍 Extracting claim data from thread...");
+      console.log("📧 Thread preview (first 500 chars):", threadJson.substring(0, 500));
+      
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-2024-08-06",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -158,10 +161,13 @@ Return null if no Gladstone reference is found (not a claim email).`;
 
       const content = completion.choices[0].message.content;
       if (!content) {
+        console.log("❌ No content returned from OpenAI");
         return null;
       }
 
+      console.log("✅ OpenAI raw response:", content);
       const extracted = JSON.parse(content) as ExtractedClaimData;
+      console.log("📊 Extracted data:", JSON.stringify(extracted, null, 2));
 
       // Validate Gladstone reference format (e.g., G/1829/25G)
       // Pattern: G/ followed by numbers, /, then 2 digits, then letter
