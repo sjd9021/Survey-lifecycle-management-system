@@ -16,6 +16,7 @@ export interface IStorage {
   getAllClaims(): Promise<Claim[]>;
   getClaim(id: string): Promise<Claim | undefined>;
   getClaimByGladstoneRef(gladstoneRef: string): Promise<Claim | undefined>;
+  getClaimByPolicyNumber(policyNumber: string): Promise<Claim | undefined>;
   findClaimsByClientRefs(clientRefs: string[]): Promise<Claim[]>;
   createClaim(claim: InsertClaim): Promise<Claim>;
   updateClaim(id: string, claim: Partial<InsertClaim>): Promise<Claim | undefined>;
@@ -54,6 +55,11 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getClaimByPolicyNumber(policyNumber: string): Promise<Claim | undefined> {
+    const result = await db.select().from(claims).where(eq(claims.policyNumber, policyNumber)).limit(1);
+    return result[0];
+  }
+
   async findClaimsByClientRefs(clientRefs: string[]): Promise<Claim[]> {
     if (!clientRefs || clientRefs.length === 0) {
       return [];
@@ -82,21 +88,37 @@ export class DbStorage implements IStorage {
   }
 
   async upsertClaimByGladstoneRef(claim: InsertClaim): Promise<Claim> {
-    // First try to find by Gladstone ref (primary identifier)
-    let existing = await this.getClaimByGladstoneRef(claim.gladstoneRef);
+    let existing: Claim | undefined;
     
-    // If not found by Gladstone ref, check for overlapping client refs
+    // Strategy: Try to find existing claim using multiple identifiers in order of preference
+    // 1. Gladstone ref (most specific)
+    if (claim.gladstoneRef) {
+      existing = await this.getClaimByGladstoneRef(claim.gladstoneRef);
+      if (existing) {
+        console.log(`✓ Found existing claim by Gladstone ref: ${claim.gladstoneRef}`);
+      }
+    }
+    
+    // 2. Policy number (fallback when no Gladstone ref)
+    if (!existing && claim.policyNumber) {
+      existing = await this.getClaimByPolicyNumber(claim.policyNumber);
+      if (existing) {
+        console.log(`✓ Found existing claim by policy number: ${claim.policyNumber}`);
+      }
+    }
+    
+    // 3. Client refs (last resort - check for overlapping refs)
     if (!existing && claim.clientRefs && claim.clientRefs.length > 0) {
       const potentialMatches = await this.findClaimsByClientRefs(claim.clientRefs);
       
       if (potentialMatches.length > 0) {
-        console.warn(`Found ${potentialMatches.length} existing claim(s) with overlapping client refs for new Gladstone ref ${claim.gladstoneRef}`);
-        console.warn(`Existing claims: ${potentialMatches.map(c => c.gladstoneRef).join(', ')}`);
+        console.warn(`Found ${potentialMatches.length} existing claim(s) with overlapping client refs`);
+        console.warn(`Existing claims: ${potentialMatches.map(c => c.gladstoneRef || c.policyNumber).join(', ')}`);
         console.warn(`Shared client refs: ${claim.clientRefs.join(', ')}`);
         
         // Use the first match as the existing claim to merge into
         existing = potentialMatches[0];
-        console.warn(`Merging into existing claim: ${existing.gladstoneRef}`);
+        console.warn(`Merging into existing claim: ${existing.gladstoneRef || existing.policyNumber}`);
       }
     }
     
@@ -109,9 +131,10 @@ export class DbStorage implements IStorage {
       
       const merged = {
         ...claim,
-        // If we're merging into an existing claim with a different Gladstone ref,
-        // keep the original Gladstone ref (it was created first)
-        gladstoneRef: existing.gladstoneRef,
+        // Prefer new Gladstone ref if provided, otherwise keep existing
+        gladstoneRef: claim.gladstoneRef || existing.gladstoneRef,
+        // Prefer new policy number if provided, otherwise keep existing
+        policyNumber: claim.policyNumber || existing.policyNumber,
         clientRefs: mergedRefs.length > 0 ? mergedRefs : null,
         notificationReceivedAt: claim.notificationReceivedAt || existing.notificationReceivedAt,
         surveyDate: claim.surveyDate || existing.surveyDate,

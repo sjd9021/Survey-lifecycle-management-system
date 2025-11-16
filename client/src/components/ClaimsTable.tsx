@@ -19,7 +19,8 @@ import { format } from "date-fns";
 
 export interface ClaimData {
   id: string;
-  gladstoneRef: string;
+  gladstoneRef: string | null;
+  policyNumber: string | null;
   clientRefs: string[];
   notificationDate: Date | null;
   surveyDate: Date | null;
@@ -47,6 +48,7 @@ export function ClaimsTable({ claims, onViewDetails }: ClaimsTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead className="font-semibold">Gladstone Ref</TableHead>
+            <TableHead className="font-semibold">Policy Number</TableHead>
             <TableHead className="font-semibold">Client Refs</TableHead>
             <TableHead className="font-semibold">Notification</TableHead>
             <TableHead className="font-semibold">Survey Date</TableHead>
@@ -58,7 +60,7 @@ export function ClaimsTable({ claims, onViewDetails }: ClaimsTableProps) {
         <TableBody>
           {claims.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                 No claims found
               </TableCell>
             </TableRow>
@@ -66,11 +68,15 @@ export function ClaimsTable({ claims, onViewDetails }: ClaimsTableProps) {
             claims.map((claim) => (
               <TableRow key={claim.id} className="hover-elevate" data-testid={`row-claim-${claim.id}`}>
                 <TableCell className="font-medium" data-testid={`text-gladstone-ref-${claim.id}`}>
-                  {claim.gladstoneRef}
+                  {claim.gladstoneRef || "-"}
+                </TableCell>
+                <TableCell className="font-medium" data-testid={`text-policy-number-${claim.id}`}>
+                  {claim.policyNumber || "-"}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {claim.clientRefs.slice(0, 2).join(", ")}
-                  {claim.clientRefs.length > 2 && ` +${claim.clientRefs.length - 2}`}
+                  {claim.clientRefs && claim.clientRefs.length > 0 
+                    ? `${claim.clientRefs.slice(0, 2).join(", ")}${claim.clientRefs.length > 2 ? ` +${claim.clientRefs.length - 2}` : ''}`
+                    : "-"}
                 </TableCell>
                 <TableCell className="text-sm">{formatDate(claim.notificationDate)}</TableCell>
                 <TableCell className="text-sm">{formatDate(claim.surveyDate)}</TableCell>

@@ -9,7 +9,8 @@ if (!process.env.OPENAI_API_KEY) {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "sk-dummy" });
 
 export interface ExtractedClaimData {
-  gladstoneRef: string;
+  gladstoneRef: string | null;
+  policyNumber: string | null;
   clientRefs: string[];
   notificationReceivedAt: string | null;
   surveyDate: string | null;
@@ -39,10 +40,15 @@ export class ClaimExtractor {
 Your task is to analyze email threads and extract key claim lifecycle data.
 
 IMPORTANT CLAIM IDENTIFIERS:
-- Gladstone Reference: Format like G/1829/25G, G/1457/25B (required)
+- Gladstone Reference: Format like G/1829/25G, G/1457/25B
   - Often appears in email SUBJECT LINE (e.g., "RE: G/1457/25B - Survey Details")
   - May also appear in email body when replies reference the claim
-- Client References: BL numbers, PI numbers, policy numbers, insurer refs
+  - May be null initially if claim just notified
+- Policy Number: Insurance policy number (REQUIRED if no Gladstone ref)
+  - Usually starts with numbers and hyphens (e.g., "21-H0963406")
+  - Look for "Policy No:", "Policy Number:", "Cover Note No:"
+  - This is the PRIMARY identifier when Gladstone ref is not yet assigned
+- Client References: BL numbers, PI numbers, other reference numbers
 
 KEY LIFECYCLE EVENTS TO DETECT:
 
@@ -96,13 +102,17 @@ Return null if no Gladstone reference is found (not a claim email).`;
               type: "object",
               properties: {
                 gladstoneRef: {
-                  type: "string",
-                  description: "Gladstone reference like G/1829/25G",
+                  type: ["string", "null"],
+                  description: "Gladstone reference like G/1829/25G (may be null if not assigned yet)",
+                },
+                policyNumber: {
+                  type: ["string", "null"],
+                  description: "Insurance policy number (required if no Gladstone ref)",
                 },
                 clientRefs: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Array of client references (BL, PI, policy numbers)",
+                  description: "Array of client references (BL, PI numbers, etc - NOT including policy number)",
                 },
                 notificationReceivedAt: {
                   type: ["string", "null"],
@@ -144,6 +154,7 @@ Return null if no Gladstone reference is found (not a claim email).`;
               },
               required: [
                 "gladstoneRef",
+                "policyNumber",
                 "clientRefs",
                 "notificationReceivedAt",
                 "surveyDate",
@@ -171,20 +182,33 @@ Return null if no Gladstone reference is found (not a claim email).`;
       const extracted = JSON.parse(content) as ExtractedClaimData;
       console.log("📊 Extracted data:", JSON.stringify(extracted, null, 2));
 
-      // Validate Gladstone reference format (e.g., G/1829/25G)
-      // Pattern: G/ followed by numbers, /, then 2 digits, then letter
+      // Validate we have at least one identifier: Gladstone ref OR policy number
       const gladstonePattern = /^G\/\d+\/\d{2}[A-Z]$/i;
       
-      // If no valid Gladstone ref found, this isn't a claim email
-      if (!extracted.gladstoneRef || 
-          extracted.gladstoneRef === "" || 
-          extracted.gladstoneRef === "null" || 
-          extracted.gladstoneRef === "/" ||
-          !gladstonePattern.test(extracted.gladstoneRef)) {
-        console.log(`Skipping email - invalid or missing Gladstone ref: ${extracted.gladstoneRef}`);
+      const hasValidGladstoneRef = extracted.gladstoneRef && 
+        extracted.gladstoneRef !== "" && 
+        extracted.gladstoneRef !== "null" && 
+        extracted.gladstoneRef !== "/" &&
+        gladstonePattern.test(extracted.gladstoneRef);
+      
+      const hasValidPolicyNumber = extracted.policyNumber && 
+        extracted.policyNumber !== "" && 
+        extracted.policyNumber !== "null";
+      
+      if (!hasValidGladstoneRef && !hasValidPolicyNumber) {
+        console.log(`⏭️  Skipping email - no valid identifier (Gladstone: ${extracted.gladstoneRef}, Policy: ${extracted.policyNumber})`);
         return null;
       }
 
+      // Clean up invalid values
+      if (!hasValidGladstoneRef) {
+        extracted.gladstoneRef = null;
+      }
+      if (!hasValidPolicyNumber) {
+        extracted.policyNumber = null;
+      }
+
+      console.log(`✓ Valid claim found - Gladstone: ${extracted.gladstoneRef || 'N/A'}, Policy: ${extracted.policyNumber || 'N/A'}`);
       return extracted;
     } catch (error) {
       console.error("Error extracting claim data:", error);
@@ -198,6 +222,7 @@ Return null if no Gladstone reference is found (not a claim email).`;
   toInsertClaim(extracted: ExtractedClaimData): InsertClaim {
     return {
       gladstoneRef: extracted.gladstoneRef,
+      policyNumber: extracted.policyNumber,
       clientRefs: extracted.clientRefs,
       notificationReceivedAt: extracted.notificationReceivedAt
         ? new Date(extracted.notificationReceivedAt)

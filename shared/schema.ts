@@ -11,7 +11,8 @@ export const users = pgTable("users", {
 
 export const claims = pgTable("claims", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  gladstoneRef: text("gladstone_ref").notNull().unique(),
+  gladstoneRef: text("gladstone_ref"),
+  policyNumber: text("policy_number"),
   clientRefs: text("client_refs").array(),
   notificationReceivedAt: timestamp("notification_received_at"),
   surveyDate: timestamp("survey_date"),
