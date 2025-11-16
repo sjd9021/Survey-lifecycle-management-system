@@ -163,8 +163,17 @@ Return null if no Gladstone reference is found (not a claim email).`;
 
       const extracted = JSON.parse(content) as ExtractedClaimData;
 
-      // If no Gladstone ref found, this isn't a claim email
-      if (!extracted.gladstoneRef || extracted.gladstoneRef === "") {
+      // Validate Gladstone reference format (e.g., G/1829/25G)
+      // Pattern: G/ followed by numbers, /, then 2 digits, then letter
+      const gladstonePattern = /^G\/\d+\/\d{2}[A-Z]$/i;
+      
+      // If no valid Gladstone ref found, this isn't a claim email
+      if (!extracted.gladstoneRef || 
+          extracted.gladstoneRef === "" || 
+          extracted.gladstoneRef === "null" || 
+          extracted.gladstoneRef === "/" ||
+          !gladstonePattern.test(extracted.gladstoneRef)) {
+        console.log(`Skipping email - invalid or missing Gladstone ref: ${extracted.gladstoneRef}`);
         return null;
       }
 
