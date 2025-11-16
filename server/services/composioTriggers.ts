@@ -1,4 +1,4 @@
-import { Composio } from "composio-core";
+import { Composio } from "@composio/core";
 import { claimProcessor } from "./claimProcessor";
 import { emailProcessor } from "./emailProcessor";
 
@@ -18,24 +18,22 @@ export interface TriggerPayload {
 }
 
 export interface GmailNewMessagePayload {
-  message_id: string;
-  thread_id: string;
-  subject: string;
-  from: string;
-  to: string[];
-  received_at: string;
-  snippet: string;
+  threadId?: string;
+  messageId?: string;
+  messageText?: string;
+  sender?: string;
+  subject?: string;
+  snippet?: string;
 }
 
 export class ComposioTriggerService {
   /**
    * Create a Gmail new message trigger for a specific user
+   * Note: User must already have a connected Gmail account in Composio
    */
   async setupGmailTrigger(userId: string, config?: {
     labels?: string[];
-    from?: string;
-    to?: string;
-    subject?: string;
+    interval?: number;
   }) {
     if (!process.env.COMPOSIO_API_KEY) {
       throw new Error("COMPOSIO_API_KEY not configured");
@@ -43,15 +41,19 @@ export class ComposioTriggerService {
 
     try {
       // Create Gmail new message trigger
+      // Note: Uses polling with minimum 1-minute interval
       const trigger = await composio.triggers.create(
         userId,
-        "GMAIL_NEW_MESSAGE_RECEIVED",
+        "GMAIL_NEW_GMAIL_MESSAGE",
         {
-          triggerConfig: config || {},
+          triggerConfig: {
+            interval: config?.interval || 1, // Polling interval in minutes (minimum 1)
+            labelids: config?.labels?.[0] || "INBOX", // Gmail label ID
+          },
         }
       );
 
-      console.log(`✓ Gmail trigger created for user ${userId}: ${trigger.trigger_id}`);
+      console.log(`✓ Gmail trigger created for user ${userId}:`, trigger);
       return trigger;
     } catch (error) {
       console.error("Failed to create Gmail trigger:", error);
@@ -92,20 +94,30 @@ export class ComposioTriggerService {
 
     console.log(`📧 Gmail webhook received: ${type} (log_id: ${log_id})`);
 
-    if (type === "GMAIL_NEW_MESSAGE_RECEIVED") {
+    if (type === "GMAIL_NEW_GMAIL_MESSAGE") {
       const messageData = data as GmailNewMessagePayload;
+      const threadId = messageData.threadId;
+      const subject = messageData.subject || "";
+      
+      console.log(`  Thread ID: ${threadId}`);
+      console.log(`  Subject: ${subject}`);
       
       // Check if this is a claim-related email (basic heuristic)
       const isClaimEmail = this.isClaimRelatedEmail(messageData);
       
       if (!isClaimEmail) {
-        console.log(`⏭️  Skipping non-claim email: ${messageData.subject}`);
+        console.log(`⏭️  Skipping non-claim email: ${subject}`);
         return { status: "skipped", reason: "Not a claim-related email" };
       }
 
-      // Fetch the full thread using Gmail API
+      if (!threadId) {
+        console.log(`⚠️  No thread ID in webhook payload`);
+        return { status: "error", reason: "Missing thread ID" };
+      }
+
+      // Fetch the full thread using Composio actions
       try {
-        const threadData = await emailProcessor.fetchThread(messageData.thread_id);
+        const threadData = await emailProcessor.fetchThread(threadId);
         
         // Process the thread
         const claim = await claimProcessor.processEmailThread(threadData);
@@ -114,7 +126,7 @@ export class ComposioTriggerService {
           console.log(`✅ Processed claim from webhook: ${claim.gladstoneRef}`);
           return { status: "success", claim };
         } else {
-          console.log(`⚠️  No claim data extracted from thread ${messageData.thread_id}`);
+          console.log(`⚠️  No claim data extracted from thread ${threadId}`);
           return { status: "no_claim_found" };
         }
       } catch (error) {
@@ -130,8 +142,8 @@ export class ComposioTriggerService {
    * Simple heuristic to detect claim-related emails
    */
   private isClaimRelatedEmail(message: GmailNewMessagePayload): boolean {
-    const subject = message.subject.toLowerCase();
-    const from = message.from.toLowerCase();
+    const subject = (message.subject || "").toLowerCase();
+    const sender = (message.sender || "").toLowerCase();
     
     // Check for Gladstone references in subject
     if (subject.match(/g\/\d+\/\d+[a-z]/i)) {
@@ -157,7 +169,7 @@ export class ComposioTriggerService {
       "@cpic",
     ];
     
-    if (knownDomains.some(domain => from.includes(domain))) {
+    if (knownDomains.some(domain => sender.includes(domain))) {
       return true;
     }
     
