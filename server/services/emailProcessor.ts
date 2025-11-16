@@ -26,14 +26,14 @@ export class EmailProcessor {
       const { Composio } = await import("@composio/core");
       const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
       
-      // Use Composio action to fetch thread (v3 SDK object signature)
-      const result = await composio.actions.execute({
-        actionName: "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
+      // Use Composio tools.execute (v3 SDK)
+      const result = await composio.tools.execute("GMAIL_FETCH_MESSAGE_BY_THREAD_ID", {
         userId: userId,
-        params: {
+        arguments: {
           thread_id: threadId,
           user_id: "me",
         },
+        dangerouslySkipVersionCheck: true,
       });
 
       if (!result?.data) {
@@ -60,15 +60,15 @@ export class EmailProcessor {
       const { Composio } = await import("@composio/core");
       const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
       
-      // Use Composio action to fetch emails (v3 SDK object signature)
-      const result = await composio.actions.execute({
-        actionName: "GMAIL_FETCH_EMAILS",
+      // Use Composio tools.execute (v3 SDK)
+      const result = await composio.tools.execute("GMAIL_FETCH_EMAILS", {
         userId: userId,
-        params: {
+        arguments: {
           query: query || "",
           max_results: maxResults,
           user_id: "me",
         },
+        dangerouslySkipVersionCheck: true,
       });
 
       console.log("Gmail fetch result:", JSON.stringify(result, null, 2));

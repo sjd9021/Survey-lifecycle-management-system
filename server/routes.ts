@@ -167,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const thread = await emailProcessor.fetchThread(threadId, userId);
           
           // Process the thread through claim extraction
-          const claim = await claimProcessor.processThread(thread);
+          const claim = await claimProcessor.processEmailThread(thread);
           
           if (claim) {
             results.push({ threadId, claim });
