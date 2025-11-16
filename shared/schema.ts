@@ -26,15 +26,6 @@ export const claims = pgTable("claims", {
   status: text("status").notNull().default("NOTIFIED"),
 });
 
-export const gmailSyncState = pgTable("gmail_sync_state", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  mailbox: text("mailbox").notNull().unique(),
-  lastHistoryId: text("last_history_id"),
-  lastSyncedAt: timestamp("last_synced_at"),
-  lastMessageDate: timestamp("last_message_date"),
-  totalProcessed: text("total_processed").default("0"),
-});
-
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -44,13 +35,7 @@ export const insertClaimSchema = createInsertSchema(claims).omit({
   id: true,
 });
 
-export const insertGmailSyncStateSchema = createInsertSchema(gmailSyncState).omit({
-  id: true,
-});
-
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertClaim = z.infer<typeof insertClaimSchema>;
 export type Claim = typeof claims.$inferSelect;
-export type InsertGmailSyncState = z.infer<typeof insertGmailSyncStateSchema>;
-export type GmailSyncState = typeof gmailSyncState.$inferSelect;
