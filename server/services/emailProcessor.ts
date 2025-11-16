@@ -84,6 +84,7 @@ export class EmailProcessor {
 
   /**
    * Normalize raw Gmail thread data into our structured format
+   * Also handles simplified test data format
    */
   normalizeThread(threadData: any): NormalizedThread {
     const messages: EmailMessage[] = [];
@@ -93,6 +94,21 @@ export class EmailProcessor {
     }
 
     for (const msg of threadData.messages) {
+      // Check if this is simplified test format (has direct properties)
+      if (msg.from && msg.subject && msg.bodyText) {
+        messages.push({
+          from: msg.from,
+          to: Array.isArray(msg.to) ? msg.to : [msg.to],
+          cc: msg.cc ? (Array.isArray(msg.cc) ? msg.cc : msg.cc.split(",").map((e: string) => e.trim()).filter(Boolean)) : undefined,
+          date: new Date(msg.date),
+          subject: msg.subject,
+          bodyText: msg.bodyText,
+          attachmentNames: msg.attachmentNames,
+        });
+        continue;
+      }
+
+      // Otherwise, parse Gmail format
       const headers = msg.payload?.headers || [];
       
       const getHeader = (name: string) => {
@@ -148,6 +164,7 @@ export class EmailProcessor {
 
   /**
    * Create a compact JSON representation of a thread for LLM processing
+   * Note: Subject lines are included as they often contain Gladstone references
    */
   compactThreadForLLM(thread: NormalizedThread): string {
     const compact = {
@@ -157,7 +174,7 @@ export class EmailProcessor {
         to: msg.to,
         cc: msg.cc,
         date: msg.date.toISOString(),
-        subject: msg.subject,
+        subject: msg.subject, // Subject often contains Gladstone ref like "G/1457/25B"
         body: msg.bodyText.substring(0, 2000), // Limit body length
         attachments: msg.attachmentNames,
       })),
