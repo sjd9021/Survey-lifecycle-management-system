@@ -85,14 +85,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Setup Gmail trigger for a user
+  // Setup Gmail trigger for a user (assumes Gmail account already connected in Composio)
   app.post("/api/triggers/gmail/setup", async (req, res) => {
     try {
-      const { userId, config } = req.body;
-
-      if (!userId) {
-        return res.status(400).json({ error: "userId required" });
-      }
+      const { userId = "replit", config } = req.body;
 
       const { composioTriggerService } = await import("./services/composioTriggers");
       const trigger = await composioTriggerService.setupGmailTrigger(userId, config);

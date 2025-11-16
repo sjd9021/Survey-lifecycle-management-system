@@ -17,23 +17,29 @@ export interface NormalizedThread {
 
 export class EmailProcessor {
   /**
-   * Fetch an email thread from Gmail using Replit integration
+   * Fetch an email thread from Gmail using Composio actions
    */
-  async fetchThread(threadId: string): Promise<NormalizedThread> {
+  async fetchThread(threadId: string, userId: string = "replit"): Promise<NormalizedThread> {
     try {
-      const { getUncachableGmailClient } = await import("./gmailClient");
-      const gmail = await getUncachableGmailClient();
+      const { Composio } = await import("@composio/core");
+      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
       
-      const response = await gmail.users.threads.get({
-        userId: "me",
-        id: threadId,
-        format: "full",
-      });
+      // Use Composio action to fetch thread
+      const result = await composio.actions.execute(
+        userId,
+        "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
+        {
+          thread_id: threadId,
+          user_id: "me",
+        }
+      );
 
-      const threadData = response.data;
-      
-      // Normalize the thread into our format
-      return this.normalizeThread(threadData);
+      if (!result.data) {
+        throw new Error("No thread data received from Composio");
+      }
+
+      // The result contains the thread data from Gmail
+      return this.normalizeThread(result.data);
     } catch (error) {
       console.error("Error fetching thread:", error);
       throw new Error(`Failed to fetch thread ${threadId}: ${error}`);
