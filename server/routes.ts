@@ -133,6 +133,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fetch and process recent emails from Gmail via Composio
+  app.post("/api/sync/fetch-recent", async (req, res) => {
+    try {
+      const { userId = "replit", query = "", maxResults = 20 } = req.body;
+
+      console.log(`📧 Fetching up to ${maxResults} recent emails from Gmail...`);
+      
+      // Fetch recent messages using Composio
+      const messages = await emailProcessor.listMessages(query, maxResults, userId);
+      
+      console.log(`✅ Found ${messages.length} messages`);
+      
+      if (messages.length === 0) {
+        return res.json({ 
+          message: "No messages found",
+          processed: 0 
+        });
+      }
+
+      // Extract unique thread IDs
+      const threadIds = [...new Set(messages.map((msg: any) => msg.threadId))];
+      console.log(`📂 Processing ${threadIds.length} unique threads...`);
+
+      const results = [];
+      let processedCount = 0;
+      let skippedCount = 0;
+
+      // Process each thread
+      for (const threadId of threadIds) {
+        try {
+          console.log(`\n🔄 Fetching thread: ${threadId}`);
+          const thread = await emailProcessor.fetchThread(threadId, userId);
+          
+          // Process the thread through claim extraction
+          const claim = await claimProcessor.processThread(thread);
+          
+          if (claim) {
+            results.push({ threadId, claim });
+            processedCount++;
+            console.log(`✅ Processed claim: ${claim.gladstoneRef}`);
+          } else {
+            skippedCount++;
+            console.log(`⏭️  Skipped (no claim data found)`);
+          }
+        } catch (error: any) {
+          console.error(`❌ Error processing thread ${threadId}:`, error.message);
+          skippedCount++;
+        }
+      }
+
+      res.json({ 
+        message: `Processed ${processedCount} claims from ${threadIds.length} threads`,
+        processed: processedCount,
+        skipped: skippedCount,
+        total: threadIds.length,
+        results
+      });
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
