@@ -78,6 +78,11 @@ export class DbStorage implements IStorage {
   }
 
   async createClaim(claim: InsertClaim): Promise<Claim> {
+    // Validate: must have at least one identifier (Gladstone ref OR policy number)
+    if (!claim.gladstoneRef && !claim.policyNumber) {
+      throw new Error("Cannot create claim: must have either gladstoneRef or policyNumber");
+    }
+    
     const result = await db.insert(claims).values(claim).returning();
     return result[0];
   }
@@ -123,27 +128,38 @@ export class DbStorage implements IStorage {
     }
     
     if (existing) {
-      // Merge data: keep existing values, update with new non-null values
+      // Merge strategy: Start with existing record, only update fields that are non-null in new data
+      // This prevents partial thread re-processing from erasing previously captured metadata
+      
       // Union client refs to avoid duplicates
       const existingRefs = existing.clientRefs || [];
       const newRefs = claim.clientRefs || [];
       const mergedRefs = Array.from(new Set([...existingRefs, ...newRefs]));
       
-      const merged = {
-        ...claim,
-        // Prefer new Gladstone ref if provided, otherwise keep existing
-        gladstoneRef: claim.gladstoneRef || existing.gladstoneRef,
-        // Prefer new policy number if provided, otherwise keep existing
-        policyNumber: claim.policyNumber || existing.policyNumber,
-        clientRefs: mergedRefs.length > 0 ? mergedRefs : null,
-        notificationReceivedAt: claim.notificationReceivedAt || existing.notificationReceivedAt,
-        surveyDate: claim.surveyDate || existing.surveyDate,
-        surveyDateFixedAt: claim.surveyDateFixedAt || existing.surveyDateFixedAt,
-        plaSentToRonnieAt: claim.plaSentToRonnieAt || existing.plaSentToRonnieAt,
-        branch: claim.branch || existing.branch,
-        insurer: claim.insurer || existing.insurer,
-        consignee: claim.consignee || existing.consignee,
-        commodity: claim.commodity || existing.commodity,
+      // Build merged record: preserve existing values, only update with new non-null values
+      const merged: Partial<InsertClaim> = {
+        // Keep existing identifiers unless new data provides them
+        gladstoneRef: claim.gladstoneRef ?? existing.gladstoneRef,
+        policyNumber: claim.policyNumber ?? existing.policyNumber,
+        clientRefs: mergedRefs.length > 0 ? mergedRefs : existing.clientRefs,
+        
+        // For dates and metadata: only update if new data has non-null value
+        notificationReceivedAt: claim.notificationReceivedAt ?? existing.notificationReceivedAt,
+        surveyDate: claim.surveyDate ?? existing.surveyDate,
+        surveyDateFixedAt: claim.surveyDateFixedAt ?? existing.surveyDateFixedAt,
+        plaSentToRonnieAt: claim.plaSentToRonnieAt ?? existing.plaSentToRonnieAt,
+        
+        branch: claim.branch ?? existing.branch,
+        insurer: claim.insurer ?? existing.insurer,
+        consignee: claim.consignee ?? existing.consignee,
+        commodity: claim.commodity ?? existing.commodity,
+        
+        // Preserve existing email metadata if new data doesn't provide it
+        latestEmailDate: claim.latestEmailDate ?? existing.latestEmailDate,
+        latestEmailSnippet: claim.latestEmailSnippet ?? existing.latestEmailSnippet,
+        
+        // Status should always reflect latest state
+        status: claim.status,
       };
       
       return (await this.updateClaim(existing.id, merged))!;
