@@ -1,0 +1,40 @@
+{
+  "thread": {
+    "threadId": "test-kandla-001",
+    "messages": [
+      {
+        "id": "msg001",
+        "from": "khanna.mahak@sojitz.com",
+        "to": "info@gladstoneagencies.com",
+        "subject": "Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406",
+        "date": "2025-11-06T17:28:11.000Z",
+        "bodyText": "Dear Respective,\n\nGreetings from Sojitz India Private Limited!\n\nWe wish to inform you that upon receipt of our cargo at Kandla Port., Kutch , Gujarat, certain damages were observed during the initial inspection.\nThe shipment details are as follows:\n\n· Consignee: Sojitz Machinery Corporation\n· Port of Discharge: Kandla Port , Kutch, Gujarat, India\n· Vessel / Voyage No.: MV.HE SHENG DONG FANG V.SP25271\n· Bill of Lading No.: 271SHKD01\n· Commodity: Used Blanking Press [BL1000T]\n· Policy / Cover Note No.: 21-H0963406 [Ref. Attachment]\n\nThe damage noticed includes visible damage – e.g., broken packaging etc.].\n\nWe want to request to initiate joint survey along with port authorities and shipping line representatives.\n\nKindly acknowledge this as our first intimation of claim under the above policy.\n\nPlease advise us on the immediate steps required, including nomination of your surveyor at the earliest.\n\nWe shall extend our full cooperation to facilitate the inspection and provide all required supporting documents.\n\nLooking forward to your guidance and confirmation.\n\nThanks & Regards,\nMahak Khanna\nManager - Machinery Department\nSojitz India Private Limited"
+      },
+      {
+        "id": "msg002",
+        "from": "n.jatia@gladstone.co.in",
+        "to": "mumbai@gladstone.co.in",
+        "subject": "Re: Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406",
+        "date": "2025-11-06T19:10:16.000Z",
+        "bodyText": "New tokio survey.\n\nConfirm.\n\nBest Regards,\nNilesh Jatia\nManaging Director\nGladstone Agencies Ltd.\nIndia, Nepal, Bhutan & Maldives"
+      },
+      {
+        "id": "msg003",
+        "from": "mumbai@gladstone.co.in",
+        "to": "n.jatia@gladstone.co.in",
+        "subject": "Re: Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406",
+        "date": "2025-11-06T20:37:00.000Z",
+        "bodyText": "Noted.\n\nWill confirm the date of survey once fixed.\n\nBest regards,\nDilip"
+      },
+      {
+        "id": "msg004",
+        "from": "mumbai@gladstone.co.in",
+        "to": "n.jatia@gladstone.co.in",
+        "cc": "asha@gladstone.co.in, ronnie@gladstone.co.in, pallavi@gladstone.co.in, mona@gladstone.co.in",
+        "subject": "RE: Fwd: Information on Damage cargo received at Kandla Port / Policy No. 21-H0963406",
+        "date": "2025-11-08T13:08:05.000Z",
+        "bodyText": "Pls find enclosed email received from Sojitz India Private Limited confirming the date of survey for 10 November 2025.\n\nThey have again refused to issue the NOL from their side. We will issue the binding email from our side.\n\nBest regards,\nDilip"
+      }
+    ]
+  }
+}
