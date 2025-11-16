@@ -112,11 +112,22 @@ curl -X POST http://localhost:5000/api/process-thread \
 
 **ORM**: Drizzle ORM for type-safe database operations
 
+**Upsert Logic**:
+- When processing email threads, the system attempts to find existing claims using multiple identifiers:
+  1. First tries Gladstone reference (most specific)
+  2. Falls back to policy number if no Gladstone ref match
+  3. Last resort: checks for overlapping client refs
+- Merge strategy uses nullish coalescing (`??`) to preserve existing non-null values
+- Prevents data loss when reprocessing partial email threads
+
 **Schema Design**:
 - `users` table - Authentication (username/password)
 - `claims` table - Core claim tracking with lifecycle timestamps
-  - Unique constraint on `gladstoneRef` (primary claim identifier)
-  - Array field for `clientRefs` (BL numbers, PI numbers, policy numbers)
+  - `gladstoneRef` (nullable) - Gladstone reference (e.g., G/1457/25B), may be assigned later
+  - `policyNumber` (nullable) - Insurance policy number, fallback identifier when no Gladstone ref
+  - **Claim identification strategy**: System uses 3-tier lookup (Gladstone ref → policy number → client refs)
+  - At least one identifier (gladstoneRef OR policyNumber) required for valid claim
+  - Array field for `clientRefs` (BL numbers, PI numbers, other reference numbers)
   - Timestamp fields for each lifecycle event (notification, survey, PLA)
   - Status field with predefined values (NOTIFIED, SURVEY_SCHEDULED, PLA_SENT)
   - Metadata fields (branch, insurer, consignee, commodity)
