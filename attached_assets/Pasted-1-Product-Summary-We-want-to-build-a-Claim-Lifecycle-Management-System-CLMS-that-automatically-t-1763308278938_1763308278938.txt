@@ -1,0 +1,555 @@
+1. Product Summary
+
+We want to build a Claim Lifecycle Management System (CLMS) that automatically tracks the progress of marine/cargo insurance claims based on email activity.
+
+Today, most of the claim lifecycle is hidden inside:
+
+Long email threads between:
+
+Branch offices (e.g. Mumbai) and head office (Nilesh / Ronnie),
+
+Nilesh and insurers/brokers (BARBUSS, Marsh, NGI, etc.),
+
+Branch offices and consignees (customers).
+
+A manually maintained Excel sheet that tries to mirror:
+
+When claim notifications came in,
+
+When survey dates were fixed,
+
+When PLA (Preliminary Loss Advice) / preliminary report was raised to seniors.
+
+The goal of CLMS is to:
+
+Use Composio Gmail triggers to continuously listen to relevant mailboxes,
+
+Read and interpret email threads,
+
+Maintain a single source of truth (Notion DB or custom DB) that tracks:
+
+Key lifecycle events for each claim,
+
+Current state of the claim,
+
+Where we are overdue vs internal timelines.
+
+2. Objectives
+2.1 Core Objectives
+
+Automatically create and update claim records based purely on emails.
+
+Continuously listen to mailbox activity via Composio Gmail triggers.
+
+Maintain a normalized “Claim” record with:
+
+Claim identifiers (Gladstone Ref, BL No., PI No., insurer ref),
+
+Key events:
+
+Notification received,
+
+Survey date decided,
+
+PLA sent internally to seniors (e.g. Ronnie),
+
+Current “state” of the claim derived from these events.
+
+Identify overdue claims using simple SLA rules and surface them clearly.
+
+2.2 Non-Goals (for v1)
+
+No custom UI beyond Notion / a simple internal dashboard.
+
+No automatic outbound responses to clients/insurers (everything remains manual).
+
+No full financial/settlement workflow (invoices, recovery, etc. can be added later).
+
+3. Users & Personas
+
+Branch Survey Ops (e.g. Mumbai)
+
+Attend surveys, coordinate with consignees, send PLAs to seniors.
+
+Need a quick view of:
+
+“What is pending?”
+
+“Which claims don’t yet have survey dates / PLAs?”
+
+Head Office (Nilesh / Ronnie)
+
+Oversee multiple branches and insurers.
+
+Need visibility into:
+
+Claim volumes,
+
+Where things are stuck,
+
+Whether branches are complying with timing (e.g. survey fixed within X days, PLA within Y days).
+
+Management / Admin
+
+Periodic reporting on open claims and overdue timelines.
+
+4. Email Ecosystem & Thread Types
+
+For a single claim, we typically have multiple distinct email threads, not just one.
+
+We usually see three main thread types:
+
+Internal Thread – Branch ↔ Nilesh / Ronnie (Head Office)
+
+Insurer/Broker Thread – Nilesh ↔ Insurer/Broker
+
+Consignee Thread – Branch ↔ Consignee / Local Contact
+
+Each contains different signals for the claim lifecycle.
+
+4.1 Thread Type A: Internal (Branch ↔ NJ / Ronnie)
+
+Mailbox:
+
+Often mumbai@gladstone.co.in and internal addresses like:
+
+n.jatia@gladstone.co.in
+
+ronnie@gladstone.co.in
+
+Other branch addresses.
+
+What it looks like (example snippets):
+
+Nilesh to branch:
+
+“Dilip, new survey near Surat.
+Please ensure notice of loss is properly served on the carriers giving them the date, time & place of survey…
+Talk to party and try to fix survey for this Thursday or Friday.”
+
+Branch reply:
+
+“Noted. Will confirm the date of survey once fixed.”
+
+Branch update:
+
+“Pls find enclosed email of consignees with attachment of NOL sent to the carriers.
+The subject survey is fixed for 14 November 2025.”
+
+Branch PLA to Ronnie:
+
+From: mumbai@gladstone.co.in
+To: Gladstone. Ronnie
+Subject: ... GLADSTONE Ref.: G/1829/25G ... (PLA)
+Body:
+“Pls find attached soft copy of PLA report no. G/1829/25G along with documents.
+Photographs will follow in next email.”
+
+Why it matters:
+
+From this internal thread we can detect:
+
+When branch acknowledges the claim internally.
+
+When the survey date is fixed (Event 2).
+
+When the PLA is prepared and sent internally up the chain to Ronnie (Event 3).
+
+4.2 Thread Type B: Insurer Thread (Nilesh ↔ Insurer/Broker)
+
+Mailbox:
+
+n.jatia@gladstone.co.in and external parties:
+
+@barbuss.com, @marsh.com, @ngiuae.com, etc.
+
+Examples:
+
+Quote request:
+
+“QUOTATION | Hazirah, India
+We hereby request your formal lump sum quotation on survey services on a box of bronze tinted glass that got damaged while traveling from Jebel Ali to Hazira…”
+
+Quotation from Nilesh:
+
+“We can do the survey at Hazira for a lumpsum USD595 per day… If we have to make a 2nd visit, USD395…”
+
+Appointment / Notification:
+
+*“We have a new appointment to conduct a survey in State Highway - 13, Village Kondh.
+We kindly request you to:
+
+confirm reception of this email informing your case's reference number
+
+reach out to the contact person to schedule an inspection of cargo…
+
+issue a letter of protest against carrier and invite them for joint inspection
+
+provide preliminary findings…
+
+issue your Preliminary Report within 48 hours
+
+issue your Final Report within 5 days…”*
+
+Why it matters:
+
+From this thread we can detect:
+
+Quote requested (optional field: quote_requested_at).
+
+Notification / Appointment → this is the “Notification comes” event (Event 1).
+
+Even if Mumbai only later sees this via forwards, the full text is in the thread.
+
+4.3 Thread Type C: Consignee Thread (Branch ↔ Consignee)
+
+Mailbox:
+
+mumbai@gladstone.co.in and local customer contacts, e.g.:
+
+@guardian.com (Gujarat Guardian),
+
+local logistics / warehouses etc.
+
+Examples:
+
+Consignee showing damage:
+
+“Upon unpacking the picture frames at the loading station, we observed that most of the lites in one corner of the rack were found to be damaged… Kindly arrange to lodge a breakage complaint and appoint a surveyor at the earliest…”
+
+Branch coordination:
+
+“We will attend survey on [DATE] at [TIME]. Please ensure cargo is available…”
+
+Why it matters:
+
+It reinforces that damage occurred and often helps confirm survey dates and locations.
+
+The LLM can use this thread to cross-check event detection.
+
+5. Claim Identity & Linking Across Threads
+
+Because one claim can have multiple threads, the system must link them to a single “Claim” record using shared identifiers, typically:
+
+Gladstone Reference
+
+e.g. G/1829/25G, G/1457/25B.
+
+BL (Bill of Lading) Number
+
+e.g. BL No. MAEU260730677.
+
+PI / Invoice / Policy References
+
+e.g. PI 9610232-2, P/01/OMP/2024/00011, Marsh ref (MENAC-193509).
+
+These identifiers appear in:
+
+Subject lines (often very verbose),
+
+Body of emails,
+
+Attached documents.
+
+Design decision:
+
+The LLM will normalize each thread into a structured object containing:
+
+gladstone_ref
+
+client_refs[] (BL, PI, policy, insurer ref)
+
+When updating the DB, we merge threads by these keys, so we see:
+
+One Claim → many Threads → one unified lifecycle in DB.
+
+6. Key Lifecycle Events
+
+For v1, we keep it simple and focus on three main events that we want to track in the DB:
+
+Event 1 – Notification comes
+
+Event 2 – Survey date decided
+
+Event 3 – PLA sent to Ronnie (internal escalation)
+
+6.1 Event 1 – Notification Comes
+
+Definition:
+
+The first email in any related thread where the insurer/broker/principal:
+
+Clearly APPOINTS Gladstone as surveyor or
+
+Requests Gladstone to conduct/arrange a survey for specific damage.
+
+Examples (from Insurer Thread):
+
+“We have a new appointment to conduct a survey in State Highway - 13, Village Kondh…”
+
+“Please let us know if you intend to depute a surveyor on this claim.” (followed by appointment mail)
+
+Field in DB:
+
+notification_received_at (date-time of appointment email).
+
+6.2 Event 2 – Survey Date Decided
+
+Definition:
+
+The internal or external email where a specific date for the survey is fixed.
+
+Example (from Internal Thread):
+
+“The subject survey is fixed for 14 November 2025.”
+
+Fields in DB:
+
+survey_date → 2025-11-14
+
+survey_date_fixed_at → 2025-11-12T16:57:00+05:30 (time of Dilip’s email)
+
+6.3 Event 3 – PLA Sent to Ronnie
+
+Definition:
+
+The email from branch (e.g. mumbai@gladstone.co.in) to senior (Ronnie), indicating that PLA (Preliminary Loss Advice / preliminary report) is ready and shared internally.
+
+Example (from Internal Thread):
+
+From: mumbai@gladstone.co.in
+
+To: Gladstone. Ronnie
+
+Cc: Asha, Nilesh, Survey Team, Viraj etc.
+
+Subject: ... GLADSTONE Ref.: G/1829/25G ... (PLA)
+
+Body:
+
+“Pls find attached soft copy of PLA report no. G/1829/25G along with documents. Photographs will follow in next email.”
+
+Fields in DB:
+
+pla_sent_to_ronnie_at → 2025-11-15T21:37:00+05:30
+
+In practice, this is the moment the PLA “goes up the chain” and corresponds to a key column in the current Excel.
+
+7. Data Model (Claim Record)
+
+Each Claim in our DB or Notion will look roughly like:
+
+Identity:
+
+gladstone_ref – e.g. G/1829/25G
+
+client_refs[] – ["BL MAEU260730677", "PI 9610232-2", "MENAC-193509"]
+
+Core Events:
+
+notification_received_at
+
+survey_date
+
+survey_date_fixed_at
+
+pla_sent_to_ronnie_at
+
+Optional Extras (for future):
+
+quote_requested_at
+
+branch (Mumbai, Kolkata, etc.)
+
+insurer / broker
+
+consignee
+
+commodity
+
+latest_email_date
+
+latest_email_snippet
+
+These map 1:1 to the old Excel’s “Notification Date”, “Survey Date”, “PLA Date” etc.
+
+8. Claim State & Overdues
+
+From the three events, we can derive a simple state machine for each claim:
+
+NOTIFIED
+
+notification_received_at is set.
+
+survey_date is null.
+
+SURVEY_SCHEDULED
+
+survey_date is set.
+
+pla_sent_to_ronnie_at is null.
+
+PLA_SENT
+
+pla_sent_to_ronnie_at is set.
+
+Optionally, we can treat PLA_SENT as the last state for v1.
+
+8.1 SLA / Overdue Logic (Example)
+
+We can define simple rules:
+
+Rule 1: Survey scheduling overdue
+
+If notification_received_at is older than X days (e.g. 2 days),
+
+AND survey_date is still null,
+
+THEN mark claim as overdue for survey scheduling.
+
+Rule 2: PLA overdue
+
+If survey_date is in the past by more than Y days (e.g. 2 days),
+
+AND pla_sent_to_ronnie_at is still null,
+
+THEN mark claim as overdue for PLA.
+
+These can be stored as:
+
+survey_scheduling_status → OK / OVERDUE
+
+pla_status → OK / OVERDUE
+
+Or a single sla_flag field if we want simplicity.
+
+A daily cron job can recompute these flags for all claims.
+
+9. System Architecture with Composio Triggers
+9.1 Mailboxes & Triggers
+
+We configure Composio Gmail triggers on:
+
+A pipeline Gmail inbox that receives forwarded mail from:
+
+mumbai@gladstone.co.in
+
+Potentially n.jatia@gladstone.co.in (or other relevant mailboxes)
+
+or (if using Gmail directly for those users):
+
+Directly on the relevant Gmail mailboxes.
+
+Trigger behavior:
+
+On every new email that matches claim-related patterns (subjects/labels), Composio triggers a webhook to our CLMS Worker with:
+
+messageId
+
+threadId
+
+Basic metadata.
+
+9.2 CLMS Worker
+
+The worker is a small service that:
+
+Receives Composio trigger webhook.
+
+Uses Composio Gmail tools to:
+
+Fetch the entire thread (threadId), including all messages.
+
+Normalizes the thread into a compact JSON:
+
+messages[] with:
+
+from/to/cc
+
+date
+
+subject
+
+body_text
+
+any attached filenames
+
+Calls LLM (OpenAI) with:
+
+The thread JSON,
+
+Clear instructions to extract:
+
+gladstone_ref
+
+client_refs[]
+
+notification_received_at
+
+survey_date
+
+survey_date_fixed_at
+
+pla_sent_to_ronnie_at
+
+Upserts a Claim record in DB/Notion:
+
+If gladstone_ref exists → update existing claim.
+
+Else → create a new claim row.
+
+10. Continuous Updates via Gmail Trigger
+
+For every new email in any of the three thread types (internal / insurer / consignee):
+
+Trigger fires (Composio Gmail).
+
+Worker fetches the updated thread.
+
+LLM re-evaluates the key events:
+
+It may discover:
+
+A new notification (if we hadn’t previously seen the appointment email),
+
+A survey date now fixed,
+
+A PLA email to Ronnie, etc.
+
+Worker updates the Claim record:
+
+Only fills fields that are:
+
+Previously null, or
+
+Clearly more accurate (e.g. updated survey date).
+
+This gives us a living, breathing Claim DB where each new email across any of the three thread families can move the claim forward.
+
+11. Examples Across the Three Thread Types
+
+Using our running example for G/1829/25G:
+
+Insurer Thread (Nilesh ↔ BARBUSS)
+
+Quote requested → quote_requested_at (optional).
+
+Appointment mail (“We have a new appointment…”) → notification_received_at.
+
+Internal Thread (Nilesh ↔ Mumbai ↔ Ronnie)
+
+Nilesh to Dilip: new survey near Surat → branch becomes active.
+
+Dilip: “The subject survey is fixed for 14 November 2025.”
+→ sets survey_date and survey_date_fixed_at.
+
+Dilip to Ronnie: PLA email with (PLA) in subject and “PLA report no. G/1829/25G” in body →
+→ sets pla_sent_to_ronnie_at.
+
+Consignee Thread (Mumbai ↔ Gujarat Guardian)
+
+Emails describing damage and providing photos and documents.
+
+Confirms practical details for the survey date and location.
+
+All of this is stitched together by Gladstone Ref + BL/PI refs, and continuously kept in sync via Composio Gmail triggers + the CLMS Worker.
