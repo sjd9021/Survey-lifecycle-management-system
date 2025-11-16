@@ -10,31 +10,39 @@ Preferred communication style: Simple, everyday language.
 
 ## Quick Start
 
-### Setting up Gmail Triggers (v3 Composio SDK)
+### Prerequisites
+1. **Gmail connected to Composio**: Connect your Gmail account via [Composio Dashboard](https://platform.composio.dev) using userId=`replit`
+2. **API Keys configured**: Set `COMPOSIO_API_KEY`, `COMPOSIO_WEBHOOK_SECRET`, and `OPENAI_API_KEY` in environment variables
+
+### Setting up Automated Email Monitoring
 
 1. **Configure webhook URL** in [Composio Dashboard](https://platform.composio.dev/?next_page=/settings/events):
-   - Webhook URL: `https://your-replit-app.replit.app/api/webhook/composio`
-   - Get webhook secret and set as `COMPOSIO_WEBHOOK_SECRET` environment variable
+   - Navigate to Settings → Events & Triggers
+   - Set webhook URL: `https://your-replit-app.replit.app/api/webhook/composio`
+   - Copy the webhook secret and set as `COMPOSIO_WEBHOOK_SECRET` environment variable
 
-2. **Create a trigger** for a user:
+2. **Create Gmail trigger**:
    ```bash
    curl -X POST http://localhost:5000/api/triggers/gmail/setup \
      -H "Content-Type: application/json" \
      -d '{
-       "userId": "user@example.com",
+       "userId": "replit",
        "config": {
          "labels": ["INBOX"],
-         "subject": "claim"
+         "interval": 1
        }
      }'
    ```
+   
+   This returns a trigger ID (e.g., `ti_vKFpBMVsawA8`) which will poll Gmail every 1 minute for new emails.
 
-3. **Incoming emails** matching the filter will automatically:
-   - Trigger webhook to `/api/webhook/composio`
-   - Fetch full email thread from Gmail
-   - Extract claim data using OpenAI
-   - Upsert claim to PostgreSQL database
-   - Update dashboard in real-time
+3. **How it works**:
+   - Composio polls Gmail every minute for new emails in INBOX
+   - When a new claim-related email arrives, Composio sends webhook to `/api/webhook/composio`
+   - System fetches full email thread using Composio actions API
+   - OpenAI extracts claim data from the thread
+   - Claim is upserted to PostgreSQL database
+   - Dashboard updates in real-time
 
 ### Manual Thread Processing
 
@@ -88,15 +96,14 @@ curl -X POST http://localhost:5000/api/process-thread \
 - Middleware for request logging and error handling
 
 **Core Services**:
-1. **Gmail Client** (`gmailClient.ts`) - Manages Gmail API authentication via Replit integration
-2. **Email Processor** (`emailProcessor.ts`) - Fetches and normalizes Gmail thread data
+1. **Composio Trigger Service** (`composioTriggers.ts`) - Manages Gmail triggers and webhook handling
+2. **Email Processor** (`emailProcessor.ts`) - Fetches threads via Composio actions and normalizes data
 3. **Claim Extractor** (`claimExtractor.ts`) - Uses OpenAI to extract claim data from email threads
 4. **Claim Processor** (`claimProcessor.ts`) - Orchestrates email processing and claim upsert logic
-5. **Composio Trigger Service** (`composioTriggers.ts`) - Manages v3 SDK triggers and webhooks
-6. **Storage Layer** (`storage.ts`) - Database abstraction with interface-based design
+5. **Storage Layer** (`storage.ts`) - Database abstraction with interface-based design
 
 **Data Processing Pipeline**:
-- **Automated**: Gmail webhook → Composio trigger → Fetch thread → OpenAI extraction → Database upsert → Dashboard update
+- **Automated**: Composio polling → New email detected → Webhook sent → Fetch thread via Composio → OpenAI extraction → Database upsert → Dashboard update
 - **Manual**: POST /api/process-thread → Normalize thread → OpenAI extraction → Database upsert
 
 ### Data Storage
@@ -131,25 +138,18 @@ curl -X POST http://localhost:5000/api/process-thread \
    - Configuration: `DATABASE_URL` environment variable
    - Package: `@neondatabase/serverless`
 
-3. **Composio v3 SDK** (Implemented)
-   - Purpose: Gmail webhook triggers for automated email monitoring
-   - Package: `composio-core@latest`
-   - Implementation: `server/services/composioTriggers.ts`
+3. **Composio** (Required for Gmail automation)
+   - Purpose: Gmail polling, webhooks, and email fetching via actions API
+   - Package: `@composio/core@latest`
+   - Implementation: `server/services/composioTriggers.ts`, `server/services/emailProcessor.ts`
    - Configuration: `COMPOSIO_API_KEY`, `COMPOSIO_WEBHOOK_SECRET`
    - Features:
-     - Automated Gmail trigger creation and management
-     - Webhook signature verification for security
-     - Smart email filtering (claim-related emails only)
-     - Real-time claim processing from incoming emails
+     - Automated Gmail trigger creation and management (polls every 1 minute)
+     - Webhook delivery for new emails with signature verification
+     - Smart email filtering (only processes claim-related emails)
+     - Fetch full Gmail threads via actions API (`GMAIL_FETCH_MESSAGE_BY_THREAD_ID`)
    - Documentation: https://docs.composio.dev/docs/using-triggers
-
-4. **Google Gmail API** (Integrated via Replit)
-   - Purpose: Fetch email threads programmatically
-   - Package: `googleapis`
-   - Implementation: `server/services/gmailClient.ts`
-   - Status: Fully integrated using Replit's Google Mail connection
-   - Connection ID: `conn_google-mail_01KA6NWR7CM7QA6BEPMPGXT6KR`
-   - Permissions: Read messages, send emails, manage labels
+   - Setup: Gmail must be connected to Composio with userId=`replit` via dashboard
 
 **UI Component Libraries**:
 - Radix UI - Headless accessible components (18+ packages)
@@ -169,8 +169,6 @@ curl -X POST http://localhost:5000/api/process-thread \
 **Environment Variables Required**:
 - `DATABASE_URL` - Neon PostgreSQL connection string
 - `OPENAI_API_KEY` - OpenAI API key for claim extraction
-- `COMPOSIO_API_KEY` - Composio API key for trigger management (optional for manual processing)
+- `COMPOSIO_API_KEY` - Composio API key for trigger management and Gmail actions
 - `COMPOSIO_WEBHOOK_SECRET` - Webhook signature verification secret (recommended for production)
 - `NODE_ENV` - Environment mode (development/production)
-- `REPLIT_CONNECTORS_HOSTNAME` - Auto-configured by Replit for Gmail integration
-- `REPL_IDENTITY` or `WEB_REPL_RENEWAL` - Auto-configured by Replit for authentication
