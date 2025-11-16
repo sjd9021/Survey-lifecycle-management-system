@@ -50,6 +50,7 @@ export default function Dashboard() {
   const tableData: ClaimData[] = claims.map((claim) => ({
     id: claim.id,
     gladstoneRef: claim.gladstoneRef,
+    policyNumber: claim.policyNumber,
     clientRefs: claim.clientRefs || [],
     notificationDate: claim.notificationReceivedAt ? new Date(claim.notificationReceivedAt) : null,
     surveyDate: claim.surveyDate ? new Date(claim.surveyDate) : null,
