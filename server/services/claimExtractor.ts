@@ -40,6 +40,8 @@ Your task is to analyze email threads and extract key claim lifecycle data.
 
 IMPORTANT CLAIM IDENTIFIERS:
 - Gladstone Reference: Format like G/1829/25G, G/1457/25B (required)
+  - Often appears in email SUBJECT LINE (e.g., "RE: G/1457/25B - Survey Details")
+  - May also appear in email body when replies reference the claim
 - Client References: BL numbers, PI numbers, policy numbers, insurer refs
 
 KEY LIFECYCLE EVENTS TO DETECT:
