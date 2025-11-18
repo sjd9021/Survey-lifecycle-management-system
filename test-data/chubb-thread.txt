@@ -1,0 +1,54 @@
+From: "NJ Insurance" <nj@gladstoneinsurance.com>
+To: ronnie@gladstoneinsurance.com
+Date: September 27, 2024
+Subject: Claim Notification - CHUBB 13901027002 - Door Damage
+
+Hi Ronnie,
+
+We have received a claim notification from Chubb for policy number 13901027002.
+
+Details:
+- Insured: ABC Trading Company
+- Commodity: Electronics
+- Loss: Door damage to container during transit
+- BL Number: MAEU123456789
+- Consignee: XYZ Imports Ltd.
+
+Please advise on next steps for survey appointment.
+
+Regards,
+NJ Insurance Team
+
+---
+
+From: ronnie@gladstoneinsurance.com
+To: surveyor@marinesurvey.com
+Date: November 17, 2024
+Subject: Re: Claim Notification - CHUBB 13901027002 - Door Damage
+
+Dear Surveyor,
+
+Can you please arrange a survey for the above claim? This has been pending for quite some time.
+
+Container location: Port of Los Angeles
+Contact: John Smith - 555-1234
+
+Best regards,
+Ronnie
+Gladstone Insurance
+
+---
+
+From: surveyor@marinesurvey.com
+To: ronnie@gladstoneinsurance.com
+Date: November 18, 2024
+Subject: Re: Claim Notification - CHUBB 13901027002 - Door Damage
+
+Dear Ronnie,
+
+Survey scheduled for November 20, 2024 at 10:00 AM.
+
+Will send report by end of week.
+
+Best regards,
+Marine Survey Ltd.

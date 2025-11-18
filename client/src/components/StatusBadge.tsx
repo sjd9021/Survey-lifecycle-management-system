@@ -23,10 +23,12 @@ export function StatusBadge({ status }: StatusBadgeProps) {
     PLA_OVERDUE: { variant: "destructive", label: "PLA Overdue", icon: AlertCircle },
   };
 
-  const { variant, label, icon: Icon } = variants[status];
+  const statusConfig = variants[status] || { variant: "secondary" as const, label: status || "Unknown" };
+  const { variant, label, icon: Icon } = statusConfig;
+  const testId = status ? `badge-status-${String(status).toLowerCase()}` : "badge-status-unknown";
 
   return (
-    <Badge variant={variant} className="uppercase text-xs font-medium gap-1" data-testid={`badge-status-${status.toLowerCase()}`}>
+    <Badge variant={variant} className="uppercase text-xs font-medium gap-1" data-testid={testId}>
       {Icon && <Icon className="w-3 h-3" />}
       {label}
     </Badge>
