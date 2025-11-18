@@ -181,8 +181,6 @@ export class ComposioTriggerService {
    */
   verifyWebhookSignature(
     signature: string,
-    webhookId: string,
-    timestamp: string,
     body: string
   ): boolean {
     const webhookSecret = process.env.COMPOSIO_WEBHOOK_SECRET;
@@ -192,23 +190,28 @@ export class ComposioTriggerService {
       return true; // Allow in development
     }
 
-    if (!signature.startsWith("v1,")) {
+    if (!signature) {
+      console.warn("⚠️  No signature provided in webhook");
       return false;
     }
 
-    const receivedSignature = signature.substring(3);
-    const signingString = `${webhookId}.${timestamp}.${body}`;
-    
-    const crypto = require("crypto");
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(signingString)
-      .digest("base64");
+    try {
+      const crypto = require("crypto");
+      // Generate expected signature using HMAC SHA256
+      const expectedSignature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(body)
+        .digest("hex");
 
-    return crypto.timingSafeEqual(
-      Buffer.from(receivedSignature),
-      Buffer.from(expectedSignature)
-    );
+      // Compare signatures (constant-time comparison for security)
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      );
+    } catch (error) {
+      console.error("Signature verification error:", error);
+      return false;
+    }
   }
 }
 
