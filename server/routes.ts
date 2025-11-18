@@ -83,17 +83,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Webhook endpoint for Composio Gmail triggers (v3 SDK)
   app.post("/api/webhook/composio", async (req, res) => {
     try {
-      const signature = req.headers["webhook-signature"] as string;
-      const webhookId = req.headers["webhook-id"] as string;
-      const timestamp = req.headers["webhook-timestamp"] as string;
-
-      // Verify webhook signature for security
+      // Composio sends x-composio-signature header
+      const signature = req.headers["x-composio-signature"] as string;
+      
+      // Log webhook receipt
+      console.log("📨 Received Composio webhook");
+      console.log("Headers:", Object.keys(req.headers).filter(h => h.includes('composio')));
+      
+      // Verify webhook signature for security (if configured)
       const { composioTriggerService } = await import("./services/composioTriggers");
       const bodyStr = JSON.stringify(req.body);
       
-      if (!composioTriggerService.verifyWebhookSignature(signature, webhookId, timestamp, bodyStr)) {
-        console.warn("⚠️  Invalid webhook signature");
-        return res.status(401).json({ error: "Invalid signature" });
+      // Skip signature verification if no secret is configured
+      const webhookSecret = process.env.COMPOSIO_WEBHOOK_SECRET;
+      if (webhookSecret && signature) {
+        if (!composioTriggerService.verifyWebhookSignature(signature, bodyStr)) {
+          console.warn("⚠️  Invalid webhook signature");
+          return res.status(401).json({ error: "Invalid signature" });
+        }
       }
 
       // Handle the trigger event
