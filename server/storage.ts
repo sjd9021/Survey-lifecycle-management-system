@@ -1,4 +1,17 @@
-import { type User, type InsertUser, type Claim, type InsertClaim, users, claims } from "@shared/schema";
+import { 
+  type User, 
+  type InsertUser, 
+  type Claim, 
+  type InsertClaim,
+  type Thread,
+  type InsertThread,
+  type PendingThread,
+  type InsertPendingThread,
+  users, 
+  claims,
+  threads,
+  pendingThreads
+} from "@shared/schema";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq } from "drizzle-orm";
@@ -21,6 +34,17 @@ export interface IStorage {
   createClaim(claim: InsertClaim): Promise<Claim>;
   updateClaim(id: string, claim: Partial<InsertClaim>): Promise<Claim | undefined>;
   upsertClaimByGladstoneRef(claim: InsertClaim): Promise<Claim>;
+  
+  // Thread operations
+  getThreadsByPolicy(policyNumber: string): Promise<Thread[]>;
+  getThreadByThreadId(threadId: string): Promise<Thread | undefined>;
+  addThread(thread: InsertThread): Promise<Thread>;
+  
+  // Pending thread operations
+  getAllPendingThreads(): Promise<PendingThread[]>;
+  getPendingThreadByThreadId(threadId: string): Promise<PendingThread | undefined>;
+  addPendingThread(pendingThread: InsertPendingThread): Promise<PendingThread>;
+  deletePendingThread(threadId: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -147,7 +171,7 @@ export class DbStorage implements IStorage {
         notificationReceivedAt: claim.notificationReceivedAt ?? existing.notificationReceivedAt,
         surveyDate: claim.surveyDate ?? existing.surveyDate,
         surveyDateFixedAt: claim.surveyDateFixedAt ?? existing.surveyDateFixedAt,
-        plaSentToRonnieAt: claim.plaSentToRonnieAt ?? existing.plaSentToRonnieAt,
+        plaForwardedInternallyAt: claim.plaForwardedInternallyAt ?? existing.plaForwardedInternallyAt,
         
         branch: claim.branch ?? existing.branch,
         insurer: claim.insurer ?? existing.insurer,
@@ -157,6 +181,7 @@ export class DbStorage implements IStorage {
         // Preserve existing email metadata if new data doesn't provide it
         latestEmailDate: claim.latestEmailDate ?? existing.latestEmailDate,
         latestEmailSnippet: claim.latestEmailSnippet ?? existing.latestEmailSnippet,
+        summary: claim.summary ?? existing.summary,
         
         // Status should always reflect latest state
         status: claim.status,
@@ -166,6 +191,53 @@ export class DbStorage implements IStorage {
     } else {
       return await this.createClaim(claim);
     }
+  }
+  
+  // Thread operations
+  async getThreadsByPolicy(policyNumber: string): Promise<Thread[]> {
+    return await db.select().from(threads).where(eq(threads.policyNumber, policyNumber));
+  }
+  
+  async getThreadByThreadId(threadId: string): Promise<Thread | undefined> {
+    const result = await db.select().from(threads).where(eq(threads.threadId, threadId)).limit(1);
+    return result[0];
+  }
+  
+  async addThread(thread: InsertThread): Promise<Thread> {
+    const existing = await this.getThreadByThreadId(thread.threadId);
+    if (existing) {
+      // Update last processed timestamp
+      const updated = await db.update(threads)
+        .set({ lastProcessedAt: new Date() })
+        .where(eq(threads.threadId, thread.threadId))
+        .returning();
+      return updated[0];
+    }
+    const result = await db.insert(threads).values(thread).returning();
+    return result[0];
+  }
+  
+  // Pending thread operations
+  async getAllPendingThreads(): Promise<PendingThread[]> {
+    return await db.select().from(pendingThreads);
+  }
+  
+  async getPendingThreadByThreadId(threadId: string): Promise<PendingThread | undefined> {
+    const result = await db.select().from(pendingThreads).where(eq(pendingThreads.threadId, threadId)).limit(1);
+    return result[0];
+  }
+  
+  async addPendingThread(pendingThread: InsertPendingThread): Promise<PendingThread> {
+    const existing = await this.getPendingThreadByThreadId(pendingThread.threadId);
+    if (existing) {
+      return existing;
+    }
+    const result = await db.insert(pendingThreads).values(pendingThread).returning();
+    return result[0];
+  }
+  
+  async deletePendingThread(threadId: string): Promise<void> {
+    await db.delete(pendingThreads).where(eq(pendingThreads.threadId, threadId));
   }
 }
 

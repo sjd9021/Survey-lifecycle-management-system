@@ -17,12 +17,13 @@ export interface ExtractedClaimData {
   notificationReceivedAt: string | null;
   surveyDate: string | null;
   surveyDateFixedAt: string | null;
-  plaSentToRonnieAt: string | null;
+  plaForwardedInternallyAt: string | null;
   branch: string | null;
   insurer: string | null;
   consignee: string | null;
   commodity: string | null;
-  status: "NOTIFIED" | "SURVEY_SCHEDULED" | "PLA_SENT";
+  summary: string | null;
+  status: "NOTIFIED" | "WAITING_FOR_SURVEY_APPOINTMENT" | "SURVEY_SCHEDULED" | "SURVEY_OVERDUE" | "PLA_SENT" | "PLA_OVERDUE";
 }
 
 export class ClaimExtractor {
@@ -66,24 +67,34 @@ KEY LIFECYCLE EVENTS TO DETECT:
    - Keywords: "survey is fixed for", "survey scheduled for", "will attend survey on"
    - Extract both the survey date AND when it was fixed (surveyDateFixedAt)
 
-3. PLA SENT TO RONNIE (Event 3):
-   - Look for email FROM branch (mumbai@gladstone.co.in) TO Ronnie
+3. PLA FORWARDED INTERNALLY (Event 3):
+   - Look for email FROM branch (mumbai@gladstone.co.in, bangalore@gladstone.co.in) TO internal staff like Ronnie, Pallavi
    - Subject usually contains "(PLA)" and Gladstone ref
    - Keywords: "PLA report", "preliminary loss advice", "attached soft copy of PLA"
-   - Extract timestamp when PLA was sent
+   - Extract timestamp when PLA was sent internally
 
 ADDITIONAL METADATA:
-- Branch: Mumbai, Kolkata, Chennai, Delhi (infer from email addresses)
-- Insurer: Company name like Marsh, TKY Japan, MSIG Singapore, CPIC, WK Webster
+- Branch: Mumbai, Kolkata, Chennai, Delhi, Bangalore (infer from email addresses)
+- Insurer: Company name like Marsh, TKY Japan, MSIG Singapore, CPIC, WK Webster, Chubb Korea
 - Consignee: Customer company name
 - Commodity: Type of cargo (glass, machinery, textiles, etc.)
 
-STATUS LOGIC:
-- If PLA sent to Ronnie → status = "PLA_SENT"
-- Else if survey date is set → status = "SURVEY_SCHEDULED"
-- Else → status = "NOTIFIED"
+STATUS CALCULATION RULES:
+1. If notification received but NO survey date fixed for more than 2 calendar days → "WAITING_FOR_SURVEY_APPOINTMENT"
+2. If survey date is fixed but hasn't happened yet → "SURVEY_SCHEDULED"
+3. If survey date passed but no PLA sent for 12+ hours → "SURVEY_OVERDUE"
+4. If PLA was sent internally → "PLA_SENT"
+5. If PLA sent but no follow-up action for 12+ hours → "PLA_OVERDUE"
+6. Otherwise (just notified) → "NOTIFIED"
 
-Return null if no Gladstone reference is found (not a claim email).`;
+SUMMARY GENERATION:
+Generate a 3-4 line plain-English summary explaining:
+- What happened in this claim (type of damage, commodity)
+- Current status (where we are in the process)
+- Next steps or what we're waiting for
+Make it readable for non-technical staff to understand at a glance.
+
+Return valid data if either policyNumber OR gladstoneRef exists (at least one is required).`;
 
     const userPrompt = `Analyze this email thread and extract claim data:\n\n${threadJson}`;
 
@@ -138,9 +149,9 @@ Return null if no Gladstone reference is found (not a claim email).`;
                   description:
                     "ISO timestamp when survey date was confirmed/fixed",
                 },
-                plaSentToRonnieAt: {
+                plaForwardedInternallyAt: {
                   type: ["string", "null"],
-                  description: "ISO timestamp when PLA was sent to Ronnie",
+                  description: "ISO timestamp when PLA was sent internally (to Ronnie, Pallavi, etc.)",
                 },
                 branch: {
                   type: ["string", "null"],
@@ -159,10 +170,14 @@ Return null if no Gladstone reference is found (not a claim email).`;
                   type: ["string", "null"],
                   description: "Type of cargo/commodity",
                 },
+                summary: {
+                  type: ["string", "null"],
+                  description: "3-4 line plain-English summary of claim status, events, and next steps",
+                },
                 status: {
                   type: "string",
-                  enum: ["NOTIFIED", "SURVEY_SCHEDULED", "PLA_SENT"],
-                  description: "Current claim status based on events",
+                  enum: ["NOTIFIED", "WAITING_FOR_SURVEY_APPOINTMENT", "SURVEY_SCHEDULED", "SURVEY_OVERDUE", "PLA_SENT", "PLA_OVERDUE"],
+                  description: "Current claim status based on lifecycle events and overdue rules",
                 },
               },
               required: [
@@ -172,11 +187,12 @@ Return null if no Gladstone reference is found (not a claim email).`;
                 "notificationReceivedAt",
                 "surveyDate",
                 "surveyDateFixedAt",
-                "plaSentToRonnieAt",
+                "plaForwardedInternallyAt",
                 "branch",
                 "insurer",
                 "consignee",
                 "commodity",
+                "summary",
                 "status",
               ],
               additionalProperties: false,
@@ -250,8 +266,8 @@ Return null if no Gladstone reference is found (not a claim email).`;
       surveyDateFixedAt: extracted.surveyDateFixedAt
         ? new Date(extracted.surveyDateFixedAt)
         : null,
-      plaSentToRonnieAt: extracted.plaSentToRonnieAt
-        ? new Date(extracted.plaSentToRonnieAt)
+      plaForwardedInternallyAt: extracted.plaForwardedInternallyAt
+        ? new Date(extracted.plaForwardedInternallyAt)
         : null,
       branch: extracted.branch,
       insurer: extracted.insurer,
@@ -259,6 +275,7 @@ Return null if no Gladstone reference is found (not a claim email).`;
       commodity: extracted.commodity,
       latestEmailDate: null,
       latestEmailSnippet: null,
+      summary: extracted.summary,
       status: extracted.status,
     };
   }
