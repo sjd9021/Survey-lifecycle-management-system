@@ -29,6 +29,8 @@ export interface ClaimData {
   branch?: string;
   insurer?: string;
   consignee?: string;
+  commodity?: string;
+  summary?: string | null;
 }
 
 interface ClaimsTableProps {
@@ -47,43 +49,55 @@ export function ClaimsTable({ claims, onViewDetails }: ClaimsTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="font-semibold">Gladstone Ref</TableHead>
-            <TableHead className="font-semibold">Policy Number</TableHead>
-            <TableHead className="font-semibold">Client Refs</TableHead>
-            <TableHead className="font-semibold">Notification</TableHead>
-            <TableHead className="font-semibold">Survey Date</TableHead>
-            <TableHead className="font-semibold">PLA Date</TableHead>
+            <TableHead className="font-semibold">Policy / Ref</TableHead>
+            <TableHead className="font-semibold">Summary</TableHead>
             <TableHead className="font-semibold">Status</TableHead>
+            <TableHead className="font-semibold">Survey Date</TableHead>
             <TableHead className="font-semibold w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {claims.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                 No claims found
               </TableCell>
             </TableRow>
           ) : (
             claims.map((claim) => (
               <TableRow key={claim.id} className="hover-elevate" data-testid={`row-claim-${claim.id}`}>
-                <TableCell className="font-medium" data-testid={`text-gladstone-ref-${claim.id}`}>
-                  {claim.gladstoneRef || "-"}
+                <TableCell className="font-medium min-w-[200px]" data-testid={`text-policy-ref-${claim.id}`}>
+                  <div className="flex flex-col gap-1">
+                    <div className="text-base font-semibold">
+                      {claim.policyNumber || claim.gladstoneRef || "-"}
+                    </div>
+                    {claim.policyNumber && claim.gladstoneRef && (
+                      <div className="text-sm text-muted-foreground">
+                        {claim.gladstoneRef}
+                      </div>
+                    )}
+                    {claim.consignee && (
+                      <div className="text-xs text-muted-foreground">
+                        {claim.consignee}
+                      </div>
+                    )}
+                  </div>
                 </TableCell>
-                <TableCell className="font-medium" data-testid={`text-policy-number-${claim.id}`}>
-                  {claim.policyNumber || "-"}
+                <TableCell className="max-w-md" data-testid={`text-summary-${claim.id}`}>
+                  {claim.summary ? (
+                    <div className="text-sm text-muted-foreground leading-relaxed">
+                      {claim.summary}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground italic">
+                      No summary available
+                    </div>
+                  )}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {claim.clientRefs && claim.clientRefs.length > 0 
-                    ? `${claim.clientRefs.slice(0, 2).join(", ")}${claim.clientRefs.length > 2 ? ` +${claim.clientRefs.length - 2}` : ''}`
-                    : "-"}
-                </TableCell>
-                <TableCell className="text-sm">{formatDate(claim.notificationDate)}</TableCell>
-                <TableCell className="text-sm">{formatDate(claim.surveyDate)}</TableCell>
-                <TableCell className="text-sm">{formatDate(claim.plaDate)}</TableCell>
                 <TableCell>
                   <StatusBadge status={claim.status} />
                 </TableCell>
+                <TableCell className="text-sm">{formatDate(claim.surveyDate)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
