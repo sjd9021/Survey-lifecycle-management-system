@@ -80,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Webhook endpoint for Composio Gmail triggers (v3 SDK)
+  // Webhook endpoint for Composio Gmail triggers (v3 SDK) - Updated Nov 18, 2025
   app.post("/api/webhook/composio", async (req, res) => {
     try {
       // Composio sends x-composio-signature header
