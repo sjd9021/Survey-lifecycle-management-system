@@ -2,7 +2,15 @@
 
 ## Overview
 
-The Claim Lifecycle Management System is an automated tracking platform for marine and cargo insurance claims. The system monitors email activity to track claim progression through various lifecycle stages, eliminating the need for manual Excel tracking. It processes email threads from branch offices, insurers, brokers, and consignees to maintain a single source of truth for all claim-related events and statuses.
+The Claim Lifecycle Management System is an automated tracking platform for marine and cargo insurance claims. The system monitors email activity via Composio Gmail webhooks to track claim progression through various lifecycle stages, eliminating the need for manual Excel tracking.
+
+**Key Features (Updated Nov 18, 2024)**:
+- **Multi-thread aggregation**: Processes multiple Gmail threads per claim (internal emails, insurer correspondence, consignee notifications)
+- **Policy number as primary identifier**: Uses policy numbers to link threads, with Gladstone references assigned later
+- **AI-generated summaries**: OpenAI generates 3-4 line plain-English summaries for each claim
+- **Orphaned thread handling**: Stores emails without policy numbers in pending_threads, retroactively links them when policy appears
+- **Smart status detection**: 6 statuses including overdue tracking (NOTIFIED, WAITING_FOR_SURVEY_APPOINTMENT, SURVEY_SCHEDULED, SURVEY_OVERDUE, PLA_SENT, PLA_OVERDUE)
+- **Overdue rules**: 2 calendar days for survey scheduling, 12 hours for PLA forwarding
 
 ## User Preferences
 
