@@ -41,19 +41,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Process email thread manually (for testing)
   app.post("/api/process-thread", async (req, res) => {
     try {
-      const { thread } = req.body;
+      const { threadText } = req.body;
       
-      if (!thread) {
-        return res.status(400).json({ error: "Thread data required" });
+      if (!threadText) {
+        return res.status(400).json({ error: "threadText required (string containing email thread content)" });
       }
 
-      const claim = await claimProcessor.processRawThread(thread);
+      const claim = await claimProcessor.processManualThread(threadText);
       
       if (!claim) {
-        return res.json({ message: "No claim data found in thread" });
+        return res.json({ message: "No claim data found in thread (no policy number or Gladstone ref)" });
       }
 
       res.json({ message: "Thread processed successfully", claim });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Process Gmail thread by threadId (for testing with real Gmail data)
+  app.post("/api/process-gmail-thread", async (req, res) => {
+    try {
+      const { threadId } = req.body;
+      
+      if (!threadId) {
+        return res.status(400).json({ error: "threadId required" });
+      }
+
+      const claim = await claimProcessor.processNewThread(threadId);
+      
+      if (!claim) {
+        return res.json({ message: "No claim data found in thread (may be stored in pending_threads)" });
+      }
+
+      res.json({ message: "Gmail thread processed successfully", claim });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
