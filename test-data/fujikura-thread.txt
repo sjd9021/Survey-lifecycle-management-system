@@ -1,0 +1,67 @@
+From: branch@gladstoneinsurance.com
+To: ronnie@gladstoneinsurance.com
+Date: November 15, 2024
+Subject: Urgent - Wet condition claim
+
+Hi Ronnie,
+
+Consignee reported wet condition on arrival. Need immediate survey.
+
+Container: TCLU9876543
+Commodity: Optical fiber cables
+Value: $250,000
+
+Please handle urgently.
+
+Branch Office
+
+---
+
+From: ronnie@gladstoneinsurance.com
+To: ajay@gladstoneinsurance.com
+Date: November 16, 2024
+Subject: Fwd: Urgent - Wet condition claim
+
+Ajay,
+
+Can you check if we have policy details for this? Consignee mentioned Fujikura but no policy number in notification.
+
+Ronnie
+
+---
+
+From: ajay@gladstoneinsurance.com
+To: ronnie@gladstoneinsurance.com
+Date: November 16, 2024
+Subject: Re: Fwd: Urgent - Wet condition claim
+
+Ronnie,
+
+Found it - Policy Number: FUJIKURA-2024-088
+Insured: Fujikura Electronics
+Insurer: QBE
+
+I'll forward the full policy details.
+
+Ajay
+
+---
+
+From: ronnie@gladstoneinsurance.com
+To: surveyor@marinesurvey.com
+Date: November 17, 2024
+Subject: Survey Required - FUJIKURA-2024-088 - Wet Condition
+
+Dear Surveyor,
+
+Please arrange urgent survey for wet condition claim:
+
+Policy: FUJIKURA-2024-088
+Container: TCLU9876543
+Commodity: Optical fiber cables
+Location: Port of Oakland
+
+Contact: Sarah Johnson - 555-9876
+
+Best regards,
+Ronnie
