@@ -27,15 +27,19 @@ export default function Dashboard() {
   const { data: stats = {
     total: 0,
     notified: 0,
+    waitingForSurvey: 0,
     surveyScheduled: 0,
+    surveyOverdue: 0,
     plaSent: 0,
-    overdue: 0
+    plaOverdue: 0
   }, isLoading: statsLoading } = useQuery<{
     total: number;
     notified: number;
+    waitingForSurvey: number;
     surveyScheduled: number;
+    surveyOverdue: number;
     plaSent: number;
-    overdue: number;
+    plaOverdue: number;
   }>({
     queryKey: ["/api/stats"],
   });
@@ -54,11 +58,13 @@ export default function Dashboard() {
     clientRefs: claim.clientRefs || [],
     notificationDate: claim.notificationReceivedAt ? new Date(claim.notificationReceivedAt) : null,
     surveyDate: claim.surveyDate ? new Date(claim.surveyDate) : null,
-    plaDate: claim.plaSentToRonnieAt ? new Date(claim.plaSentToRonnieAt) : null,
+    plaDate: claim.plaForwardedInternallyAt ? new Date(claim.plaForwardedInternallyAt) : null,
     status: claim.status as ClaimStatus,
     branch: claim.branch || undefined,
     insurer: claim.insurer || undefined,
     consignee: claim.consignee || undefined,
+    commodity: claim.commodity || undefined,
+    summary: claim.summary || null,
   }));
 
   // Convert selected claim to detail format
@@ -74,7 +80,7 @@ export default function Dashboard() {
         surveyDateFixedAt: selectedClaim.surveyDateFixedAt
           ? new Date(selectedClaim.surveyDateFixedAt)
           : null,
-        plaDate: selectedClaim.plaSentToRonnieAt ? new Date(selectedClaim.plaSentToRonnieAt) : null,
+        plaDate: selectedClaim.plaForwardedInternallyAt ? new Date(selectedClaim.plaForwardedInternallyAt) : null,
         status: selectedClaim.status as ClaimStatus,
         branch: selectedClaim.branch || undefined,
         insurer: selectedClaim.insurer || undefined,
@@ -94,10 +100,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatsCard label="Total Claims" value={stats.total} />
+        <StatsCard label="Awaiting Survey" value={stats.waitingForSurvey} />
         <StatsCard label="Survey Scheduled" value={stats.surveyScheduled} />
-        <StatsCard label="Overdue" value={stats.overdue} />
+        <StatsCard label="Overdue" value={stats.surveyOverdue + stats.plaOverdue} />
       </div>
 
       <div className="flex items-center justify-between">
