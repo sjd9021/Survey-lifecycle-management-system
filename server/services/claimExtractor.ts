@@ -3,7 +3,9 @@ import type { InsertClaim } from "@shared/schema";
 
 // Log warning at startup if API key is missing
 if (!process.env.OPENAI_API_KEY) {
-  console.warn("⚠️  OPENAI_API_KEY not set - email thread processing will be unavailable");
+  console.warn(
+    "⚠️  OPENAI_API_KEY not set - email thread processing will be unavailable",
+  );
 }
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "sk-dummy" });
@@ -27,14 +29,16 @@ export class ClaimExtractor {
   /**
    * Extract claim data from an email thread using OpenAI
    */
-  async extractClaimData(threadJson: string): Promise<ExtractedClaimData | null> {
+  async extractClaimData(
+    threadJson: string,
+  ): Promise<ExtractedClaimData | null> {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error(
         "OPENAI_API_KEY environment variable is required for claim extraction. " +
-        "Please configure it to enable email thread processing."
+          "Please configure it to enable email thread processing.",
       );
     }
-    
+
     const systemPrompt = `You are an expert at extracting structured claim information from marine/cargo insurance email threads.
 
 Your task is to analyze email threads and extract key claim lifecycle data.
@@ -85,10 +89,13 @@ Return null if no Gladstone reference is found (not a claim email).`;
 
     try {
       console.log("🔍 Extracting claim data from thread...");
-      console.log("📧 Thread preview (first 500 chars):", threadJson.substring(0, 500));
-      
+      console.log(
+        "📧 Thread preview (first 500 chars):",
+        threadJson.substring(0, 500),
+      );
+
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -103,20 +110,24 @@ Return null if no Gladstone reference is found (not a claim email).`;
               properties: {
                 gladstoneRef: {
                   type: ["string", "null"],
-                  description: "Gladstone reference like G/1829/25G (may be null if not assigned yet)",
+                  description:
+                    "Gladstone reference like G/1829/25G (may be null if not assigned yet)",
                 },
                 policyNumber: {
                   type: ["string", "null"],
-                  description: "Insurance policy number (required if no Gladstone ref)",
+                  description:
+                    "Insurance policy number (required if no Gladstone ref)",
                 },
                 clientRefs: {
                   type: "array",
                   items: { type: "string" },
-                  description: "Array of client references (BL, PI numbers, etc - NOT including policy number)",
+                  description:
+                    "Array of client references (BL, PI numbers, etc - NOT including policy number)",
                 },
                 notificationReceivedAt: {
                   type: ["string", "null"],
-                  description: "ISO timestamp when notification/appointment was received",
+                  description:
+                    "ISO timestamp when notification/appointment was received",
                 },
                 surveyDate: {
                   type: ["string", "null"],
@@ -124,7 +135,8 @@ Return null if no Gladstone reference is found (not a claim email).`;
                 },
                 surveyDateFixedAt: {
                   type: ["string", "null"],
-                  description: "ISO timestamp when survey date was confirmed/fixed",
+                  description:
+                    "ISO timestamp when survey date was confirmed/fixed",
                 },
                 plaSentToRonnieAt: {
                   type: ["string", "null"],
@@ -132,7 +144,8 @@ Return null if no Gladstone reference is found (not a claim email).`;
                 },
                 branch: {
                   type: ["string", "null"],
-                  description: "Branch name: Mumbai, Kolkata, Chennai, or Delhi",
+                  description:
+                    "Branch name: Mumbai, Kolkata, Chennai, or Delhi",
                 },
                 insurer: {
                   type: ["string", "null"],
@@ -184,19 +197,23 @@ Return null if no Gladstone reference is found (not a claim email).`;
 
       // Validate we have at least one identifier: Gladstone ref OR policy number
       const gladstonePattern = /^G\/\d+\/\d{2}[A-Z]$/i;
-      
-      const hasValidGladstoneRef = extracted.gladstoneRef && 
-        extracted.gladstoneRef !== "" && 
-        extracted.gladstoneRef !== "null" && 
+
+      const hasValidGladstoneRef =
+        extracted.gladstoneRef &&
+        extracted.gladstoneRef !== "" &&
+        extracted.gladstoneRef !== "null" &&
         extracted.gladstoneRef !== "/" &&
         gladstonePattern.test(extracted.gladstoneRef);
-      
-      const hasValidPolicyNumber = extracted.policyNumber && 
-        extracted.policyNumber !== "" && 
+
+      const hasValidPolicyNumber =
+        extracted.policyNumber &&
+        extracted.policyNumber !== "" &&
         extracted.policyNumber !== "null";
-      
+
       if (!hasValidGladstoneRef && !hasValidPolicyNumber) {
-        console.log(`⏭️  Skipping email - no valid identifier (Gladstone: ${extracted.gladstoneRef}, Policy: ${extracted.policyNumber})`);
+        console.log(
+          `⏭️  Skipping email - no valid identifier (Gladstone: ${extracted.gladstoneRef}, Policy: ${extracted.policyNumber})`,
+        );
         return null;
       }
 
@@ -208,7 +225,9 @@ Return null if no Gladstone reference is found (not a claim email).`;
         extracted.policyNumber = null;
       }
 
-      console.log(`✓ Valid claim found - Gladstone: ${extracted.gladstoneRef || 'N/A'}, Policy: ${extracted.policyNumber || 'N/A'}`);
+      console.log(
+        `✓ Valid claim found - Gladstone: ${extracted.gladstoneRef || "N/A"}, Policy: ${extracted.policyNumber || "N/A"}`,
+      );
       return extracted;
     } catch (error) {
       console.error("Error extracting claim data:", error);
