@@ -1,0 +1,473 @@
+Nice, this is exactly the right time to consolidate everything. I’ll write this as if you’re handing it to Replit / your infra devs.
+
+---
+
+# Claim Lifecycle Tracking from Email – Full Context & Required Changes
+
+## 1. High-Level Idea (What We’re Building)
+
+We want an **email-driven Claim Lifecycle Management system** for Gladstone:
+
+* **Source of truth:** Email threads (mostly Gmail, some forwarded corporate mail).
+* **Engine:** Composio Gmail trigger + LLM.
+* **Output:** A single **Claim row** per case that tracks:
+
+  * Who/what the case is (policy no, shipper, consignee, etc.).
+  * Key lifecycle timestamps (notification, survey decisions, PLA).
+  * Derived status + “overdue” flags (e.g., survey not scheduled in time).
+
+Goal: **Every time any email arrives for a claim, the DB row for that claim gets smarter.**
+
+---
+
+## 2. What’s Already Implemented (Replit’s Current Flow)
+
+From the ASCII diagram you shared, the current Replit-style flow does this:
+
+1. **Email arrival**
+
+   * Composio polls Gmail.
+   * On new email → webhook to `/api/webhook/composio` with `threadId`.
+
+2. **Backend routing**
+
+   * Route `POST /api/webhook/composio`:
+
+     * Verifies the hook.
+     * Calls `claimProcessor.processEmailThread(threadId)`.
+
+3. **Email fetching**
+
+   * `emailProcessor.getThread(threadId)` uses a Composio Gmail tool:
+
+     * Fetches the **full Gmail thread**.
+     * Normalizes to:
+
+       ```ts
+       {
+         threadId: string,
+         messages: [
+           { from, to, date, subject, body, ... },
+           ...
+         ]
+       }
+       ```
+
+4. **LLM extraction**
+
+   * `claimExtractor.extract(normalizedThread)` calls OpenAI (e.g. gpt-4o-mini) with a system prompt like:
+
+     * “Extract claim data from email threads…”
+   * LLM returns a **claim-like object**, e.g.:
+
+     ```json
+     {
+       "gladstoneRef": "G/1457/25B",
+       "policyNumber": "21-H0963406",
+       "clientRefs": ["271SHKD01"],
+       "notificationReceivedAt": "...",
+       "surveyDate": "...",
+       "branch": "Mumbai",
+       "insurer": "New Tokio",
+       "status": "SURVEY_SCHEDULED"
+     }
+     ```
+
+5. **DB upsert with 3-tier lookup**
+
+   * `storage.upsertClaimByGladstoneRef(claim)`:
+
+     * **Tier 1:** Look up by `gladstoneRef`.
+     * **Tier 2:** If not found, look up by `policyNumber`.
+     * **Tier 3:** If still not found, look up by overlap in `clientRefs`.
+   * If existing row found → merge fields using nullish coalescing (`??`).
+   * If not → create a new row.
+
+6. **Schema**
+
+   * `claims` table includes:
+
+     * `gladstoneRef`, `policyNumber`, `clientRefs[]`,
+     * `notificationReceivedAt`, `surveyDate`, `plaSentToRonnieAt`,
+     * `branch`, `insurer`, `status`, etc.
+   * Frontend reads `GET /api/claims` and shows a table.
+
+**What’s good:**
+
+* Event-driven via Gmail trigger ✔️
+* Fetching full thread, not single message ✔️
+* Clean separation of responsibilities (fetch → extract → upsert) ✔️
+* A real DB schema and an upsert strategy ✔️
+
+---
+
+## 3. Domain Reality: How Gladstone Actually Works (Policy Number Truths)
+
+From internal conversation with the business (Bua), here’s the **actual email + ID lifecycle**:
+
+### 3.1 Three main thread types (for one claim)
+
+For **one claim**, there are usually **three separate email threads**:
+
+1. **Internal thread – Branch ↔ NJ / Ronnie**
+
+   * Example participants: `mumbai@gladstone.co.in`, `n.jatia@gladstone.co.in`, `ronnie@gladstone.co.in`, etc.
+
+2. **Insurer thread – NJ ↔ Insurer / Broker**
+
+   * Example: `n.jatia@gladstone.co.in` ↔ `@marsh.com`, `@barbuss.com`, `@ngiuae.com`.
+
+3. **Consignee thread – Branch ↔ Consignee / Local contact**
+
+   * Example: `mumbai@gladstone.co.in` ↔ `@henkel.com`, `@guardianglass.com`, etc.
+
+All three are **separate Gmail `threadId`s**, but they’re all the **same claim**.
+
+### 3.2 What IDs exist, and when
+
+Order of IDs in the lifecycle:
+
+1. **First loss notification** (crappy, from consignee)
+
+   * Subject may be ugly:
+
+     * e.g.,
+       `Fwd: [EXT] FOUND ALL BAGS IN MOISTURE CONDITION...`
+   * Often missing structured information.
+   * Sometimes the consignee already includes **Policy No.**, but not guaranteed.
+
+2. **NJ “formalizes” the subject**
+
+   * NJ replies/forwards internally and *edits the subject* to include:
+
+     * **Policy number** (this is the key)
+     * Shipper
+     * Consignee
+   * Example:
+
+     ```text
+     Policy No. : AWEZ55224225QAAA777D / Shippers : Chongqing Huafong Chemical Co. Ltd. / Consignees : Henkel ...
+     ```
+   * From this point:
+
+     * **All internal emails** about this claim use this subject.
+     * **Insurer thread** also carries this Policy No.
+   * Bua: “After this all emails will have policy number 💯%”
+
+3. **Policy number is the universal joining key**
+
+   * **Internal thread** → contains Policy No.
+   * **NJ↔Insurer thread** → contains the same Policy No.
+   * **Branch↔Consignee follow-ups** → use the Policy No once NJ has formalized it.
+
+4. **Later: Branch generates a survey report / Gladstone ref**
+
+   * Branch does the survey and generates something like:
+
+     * `G/1829/25G`, `G/1457/25B`, etc.
+   * From then on, subject typically includes:
+
+     * `Policy No: ... / GLADSTONE Ref.: G/####/##L`
+   * This is important but **later in the lifecycle** than the Policy No.
+
+**In short:**
+
+* The **first stable ID** that ties all three threads together is the **Policy Number**.
+* Survey report / Gladstone ref is a **secondary ID** that appears later.
+
+---
+
+## 4. What We Want the System to Do (End-to-End, Policy-First)
+
+We want the system, conceptually, to do this:
+
+1. **On any email that contains a Policy Number:**
+
+   * Extract:
+
+     * `policy_number`
+     * maybe `gladstone_ref` (survey report), if present.
+   * Use **policy_number as the primary key** to:
+
+     * either find an existing Claim row,
+     * or create a new Claim row if none exists yet.
+
+2. **Continuously update that Claim row** when new info appears across any of the three threads:
+
+   * From insurer thread:
+
+     * Detect **notification received** (appointment / go-ahead).
+   * From internal thread:
+
+     * Detect **survey date decisions** (“survey is fixed for 14th Nov”, “OK go ahead”).
+     * Detect when **PLA** is sent to Ronnie.
+   * From all threads:
+
+     * Extract identifiers, shipper/consignee, etc. as needed.
+
+3. **Derive status + overdues based on timestamps**, not by LLM guessing:
+
+   * If we have `notification_received_at` but no `survey_date` → `NOTIFIED`.
+   * If `survey_date` exists but no `pla_sent_to_ronnie_at` → `SURVEY_SCHEDULED`.
+   * If `pla_sent_to_ronnie_at` exists → `PLA_SENT`.
+   * Overdue:
+
+     * If time from notification → no survey date > X days → “survey overdue”.
+     * If time from survey date → no PLA > Y days → “PLA overdue”.
+
+**All of this is per Policy Number, across all threads.**
+
+---
+
+## 5. Where the Current Implementation Diverges from This Reality
+
+### 5.1 Primary key choice
+
+Current:
+
+* Treats `gladstoneRef` as the primary lookup (Tier 1), then `policyNumber`, then client refs.
+
+Reality:
+
+* For a big part of the lifecycle, there is **no survey report / Gladstone ref yet.**
+* Policy Number is the **first and only reliable shared ID** across:
+
+  * internal thread,
+  * insurer thread,
+  * consignee follow-up thread.
+
+**Impact:**
+We should treat **Policy Number as the canonical key** for grouping threads into a claim, and treat `gladstoneRef` as a **secondary** ID that appears later.
+
+---
+
+### 5.2 Multi-thread per claim
+
+Current flow is **thread-centric**:
+
+* Trigger fires per `threadId`.
+* We classify that thread, then upsert a single claim row.
+
+Reality:
+
+* One claim = multiple independent Gmail threads, all sharing the same Policy Number (and later the same survey report ref).
+* We must:
+
+  * Keep a mapping from `threadId → claimId` once identified.
+  * On a *new* thread:
+
+    * Use Policy Number (and maybe BL/PI) to attach it to the right claim row.
+
+Without that mapping + policy grouping, the system risks treating the **three threads as three separate claims.**
+
+---
+
+### 5.3 LLM doing “status” instead of “event extraction”
+
+Current extraction asks the LLM for:
+
+```json
+{
+  gladstoneRef,
+  policyNumber,
+  clientRefs,
+  notificationReceivedAt,
+  surveyDate,
+  branch,
+  insurer,
+  status: "SURVEY_SCHEDULED"
+}
+```
+
+This means:
+
+* LLM is making a **judgment call** about `status`.
+* It doesn’t see DB history (earlier emails, previous merges, etc.).
+* Status is a function of **events over time** + existing state, not just “what’s in this thread snapshot”.
+
+Domain reality:
+
+* Status should be derived from simple rules over:
+
+  * `notification_received_at`
+  * `survey_date`
+  * `pla_sent_to_ronnie_at`
+* The LLM’s job should be:
+
+  * **Reading emails and extracting these key timestamps**, not deciding what the current status is.
+
+---
+
+## 6. Concrete Improvements We Should Make
+
+### 6.1 Identity & keying: Policy-first model
+
+**What to change:**
+
+1. Treat `policyNumber` as the **primary identity** for a claim.
+2. Treat `gladstoneRef` (survey report / Gladstone case ref) as a **secondary identity** that:
+
+   * May be null for a while,
+   * Once set, must also uniquely identify the claim.
+
+**Suggested lookup order:**
+
+* **Tier 1:** `gladstoneRef` AND `policyNumber` (if both present and we want strict uniqueness).
+* **Tier 2:** `policyNumber` (the main join for multi-thread).
+* **Tier 3:** `clientRefs` (BL, PI) only if policy is missing *and* we know what we’re doing.
+
+But practically: **“Policy No” is the hero field.**
+
+---
+
+### 6.2 Thread → claim mapping
+
+**Add a simple `threads` table**:
+
+* `threads`:
+
+  * `id` (Gmail `threadId`)
+  * `claim_id` (foreign key into `claims`)
+  * maybe `first_seen_at`, `last_seen_at`, `source_mailbox`, etc.
+
+Logic:
+
+1. When a new email comes in:
+
+   * If `threadId` is already in `threads` table:
+
+     * We know exactly which claim it belongs to → load that claim.
+   * If `threadId` is not known:
+
+     * Run LLM to extract `policyNumber`, `gladstoneRef`, `clientRefs`.
+     * Use those to find or create a claim row.
+     * Insert row into `threads` linking this new `threadId` to that claim.
+
+This cleanly handles the “three threads = one claim” reality.
+
+---
+
+### 6.3 LLM role: from “status” → **event extractor**
+
+Change the LLM output schema to focus on **events**, not status.
+
+**Instead of:**
+
+```json
+{
+  gladstoneRef,
+  policyNumber,
+  clientRefs,
+  notificationReceivedAt,
+  surveyDate,
+  status
+}
+```
+
+**We want something like:**
+
+```json
+{
+  "gladstone_ref": "G/1829/25G",
+  "policy_number": "AWEZ55224225QAAA777D",
+  "client_refs": ["BL-A56FX28115", "Job 2505267"],
+  "events": {
+    "notification_received_at": "...",
+    "survey_date": "...",
+    "survey_date_fixed_at": "...",
+    "pla_sent_to_ronnie_at": "..."
+  }
+}
+```
+
+Where the system prompt very clearly defines:
+
+* **Notification:** First email from insurer/consignee asking Gladstone to attend survey / appoint surveyor (with policy).
+* **Survey date decided:** Internal emails like “survey is fixed for 14th Nov”, or NJ saying “OK go ahead”.
+* **PLA sent to Ronnie:** Internal email from branch to `ronnie@gladstone.co.in` that explicitly mentions PLA report.
+
+Then the backend:
+
+* Updates the claim row with these timestamps.
+* Derives `status` and “overdue” purely in code.
+
+---
+
+### 6.4 When to create a claim row
+
+Given how the business works, for v1 it’s fine to create a claim row only once we see a **Policy No** in the subject or body.
+
+So:
+
+* If LLM finds no `policy_number`:
+
+  * Either ignore the email (do not create claim yet), or
+  * Store it in a “unlinked_emails” table for potential later association.
+* Once NJ sends the formalized subject with `Policy No: ...`:
+
+  * That email will trigger claim creation:
+
+    * `policy_number = (...)`
+    * `notification_received_at` maybe from that or earlier part of thread.
+
+This matches reality: a “claim” in the system becomes real when **NJ has blessed the subject with a policy number.**
+
+---
+
+### 6.5 Optional: “all threads for this policy” input to LLM
+
+More advanced version (but aligns with what Samvit wants):
+
+* Once we know a `policy_number`, we can, for that policy:
+
+  * Collect all messages from **all threads** linked to that claim.
+  * Give the LLM one combined structured input:
+
+    * `claim_row` (current state),
+    * `threads` (all messages across insurer, internal, consignee).
+  * Ask:
+
+    * “Given everything, what are the latest values for:
+
+      * notification_received_at,
+      * survey_date,
+      * survey_date_fixed_at,
+      * pla_sent_to_ronnie_at?”
+
+This ensures the LLM is not confused by seeing only one of the three threads in isolation.
+
+(MVP can still work per-thread; this is just the “clean” version.)
+
+---
+
+## 7. TL;DR for Replit / Infra Folks
+
+* **Core concept is correct:** Gmail trigger → full thread → LLM → DB upsert. ✅
+* **Main domain twist:** For Gladstone, the **Policy Number is the primary key** that ties together three separate email threads (internal, insurer, consignee).
+  Survey report / Gladstone ref appears later.
+
+**Actionable changes:**
+
+1. **Key by policy number**:
+
+   * Treat `policyNumber` as the main join field for claims.
+   * Use `gladstoneRef` as a secondary ID that appears later in the lifecycle.
+
+2. **Add thread mapping**:
+
+   * `threads(threadId, claim_id)` so that once a thread is attached, future messages skip “classification” and go straight to updating that claim.
+
+3. **Change LLM output schema**:
+
+   * Ask GPT to extract:
+
+     * `policy_number`, `gladstone_ref`, `client_refs[]`
+     * A small set of **events** (notification, survey date, PLA to Ronnie).
+   * Remove `status` from GPT output; derive status + overdue purely in backend code.
+
+4. **Create claims only when policy is known**:
+
+   * First NJ subject with `Policy No:` is a safe moment to create a Claim row.
+   * Early messy emails without policy can be ignored or stored as “unlinked” for now.
+
+With these changes, the existing implementation becomes a **policy-aware, multi-thread claim lifecycle tracker** that actually matches how Gladstone runs its cases.
