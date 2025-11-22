@@ -89,8 +89,14 @@ export class EmailProcessor {
   normalizeThread(threadData: any): NormalizedThread {
     const messages: EmailMessage[] = [];
 
-    if (!threadData.messages || !Array.isArray(threadData.messages)) {
-      throw new Error("Invalid thread data structure");
+    // Handle case where threadData doesn't have messages array
+    if (!threadData || !threadData.messages) {
+      console.warn("Thread data missing messages array:", JSON.stringify(threadData).substring(0, 200));
+      throw new Error("Invalid thread data structure - no messages array");
+    }
+    
+    if (!Array.isArray(threadData.messages)) {
+      throw new Error("Invalid thread data structure - messages is not an array");
     }
 
     for (const msg of threadData.messages) {
@@ -157,7 +163,7 @@ export class EmailProcessor {
     }
 
     return {
-      threadId: threadData.id,
+      threadId: threadData.id || threadData.threadId || "unknown",
       messages,
     };
   }
