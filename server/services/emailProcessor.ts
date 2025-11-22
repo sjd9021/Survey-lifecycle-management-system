@@ -182,7 +182,134 @@ export class EmailProcessor {
 
     return JSON.stringify(compact, null, 2);
   }
+
+  /**
+   * Convert a single thread to JSON string for processing
+   * Mimics gmailClient.threadToJson() for backward compatibility
+   */
+  threadToJson(thread: any): string {
+    // Handle NormalizedThread format
+    if (thread.messages && Array.isArray(thread.messages)) {
+      const formatted = {
+        threadId: thread.threadId,
+        messages: thread.messages.map((msg: any) => ({
+          from: msg.from,
+          to: msg.to,
+          cc: msg.cc,
+          date: msg.date instanceof Date ? msg.date.toISOString() : msg.date,
+          subject: msg.subject,
+          body: msg.bodyText || msg.body || "",
+        })),
+      };
+      return JSON.stringify(formatted, null, 2);
+    }
+    
+    // Handle GmailThread format
+    return JSON.stringify(thread, null, 2);
+  }
+
+  /**
+   * Convert multiple threads to JSON string for aggregation
+   * Mimics gmailClient.threadsToJson() for backward compatibility
+   */
+  threadsToJson(threads: any[]): string {
+    const formatted = {
+      threadCount: threads.length,
+      threads: threads.map((thread: any) => {
+        if (thread.messages && Array.isArray(thread.messages)) {
+          return {
+            threadId: thread.threadId,
+            subject: thread.subject,
+            messageCount: thread.messages.length,
+            messages: thread.messages.map((msg: any) => ({
+              from: msg.from,
+              to: msg.to,
+              cc: msg.cc,
+              date: msg.date instanceof Date ? msg.date.toISOString() : msg.date,
+              subject: msg.subject,
+              body: msg.bodyText || msg.body || "",
+            })),
+          };
+        }
+        return thread;
+      }),
+    };
+    
+    return JSON.stringify(formatted, null, 2);
+  }
+
+  /**
+   * Search for Gmail threads by policy number
+   * Uses GMAIL_FETCH_EMAILS to search and return multiple threads
+   */
+  async fetchThreadsByPolicy(
+    policyNumber: string,
+    userId: string = "replit"
+  ): Promise<any[]> {
+    if (!process.env.COMPOSIO_API_KEY) {
+      throw new Error("COMPOSIO_API_KEY not configured");
+    }
+
+    try {
+      const { Composio } = await import("@composio/core");
+      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+
+      // Search for emails containing the policy number
+      const result = await composio.tools.execute("GMAIL_FETCH_EMAILS", {
+        userId: userId,
+        arguments: {
+          query: policyNumber,
+          max_results: 50,
+          user_id: "me",
+        },
+        dangerouslySkipVersionCheck: true,
+      });
+
+      const messages = result?.data?.messages || [];
+      const threadIds = new Set<string>();
+      
+      // Extract unique thread IDs
+      for (const msg of messages) {
+        if (msg.threadId) {
+          threadIds.add(msg.threadId);
+        }
+      }
+
+      console.log(`Found ${threadIds.size} threads for policy ${policyNumber}`);
+
+      // Fetch full details for each unique thread
+      const threads: any[] = [];
+      for (const threadId of threadIds) {
+        try {
+          const thread = await this.fetchThread(threadId, userId);
+          // Convert NormalizedThread to GmailThread-like format for compatibility
+          const gmailThreadFormat = {
+            threadId: thread.threadId,
+            subject: thread.messages[0]?.subject || "",
+            messages: thread.messages.map((msg) => ({
+              id: `${msg.from}-${msg.date.getTime()}`, // Synthetic ID
+              threadId: thread.threadId,
+              from: msg.from,
+              to: msg.to[0] || "",
+              subject: msg.subject,
+              date: msg.date.toISOString(),
+              body: msg.bodyText,
+              snippet: msg.bodyText.substring(0, 100),
+            })),
+          };
+          threads.push(gmailThreadFormat);
+        } catch (error) {
+          console.error(`Failed to fetch thread ${threadId}:`, error);
+        }
+      }
+
+      return threads;
+    } catch (error) {
+      console.error("Error fetching threads by policy:", error);
+      throw new Error(`Failed to fetch threads for policy ${policyNumber}: ${error}`);
+    }
+  }
 }
 
-// Export singleton instance (no need for access token with Replit integration)
+// Export singleton instance (uses Composio for all Gmail operations)
 export const emailProcessor = new EmailProcessor();

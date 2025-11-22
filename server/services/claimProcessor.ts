@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import { gmailClient, type GmailThread } from "./gmailClient";
+import { emailProcessor } from "./emailProcessor";
 import { policyExtractor } from "./policyExtractor";
 import { claimExtractor } from "./claimExtractor";
 import type { Claim } from "@shared/schema";
@@ -18,15 +18,15 @@ export class ClaimProcessor {
     try {
       console.log(`\n📧 Processing new thread: ${threadId}`);
       
-      // Fetch the thread from Gmail
-      const thread = await gmailClient.fetchThread(threadId);
-      if (!thread) {
+      // Fetch the thread from Gmail using Composio
+      const normalizedThread = await emailProcessor.fetchThread(threadId);
+      if (!normalizedThread) {
         console.error("Failed to fetch thread from Gmail");
         return null;
       }
 
       // Quick check: does this thread contain a policy number?
-      const preview = gmailClient.threadToJson(thread);
+      const preview = emailProcessor.threadToJson(normalizedThread);
       const policyCheck = await policyExtractor.extractPolicyNumber(preview);
 
       if (!policyCheck.hasPolicyNumber || !policyCheck.policyNumber) {
@@ -35,11 +35,11 @@ export class ClaimProcessor {
         // Store in pending_threads for future linking
         await storage.addPendingThread({
           threadId,
-          subject: thread.subject,
-          snippet: thread.messages[0]?.snippet || '',
+          subject: normalizedThread.messages[0]?.subject || '',
+          snippet: normalizedThread.messages[0]?.bodyText.substring(0, 100) || '',
           consignee: policyCheck.consignee,
           commodity: policyCheck.commodity,
-          threadData: thread as any,
+          threadData: normalizedThread as any,
         });
 
         console.log("✓ Stored in pending_threads");
@@ -52,7 +52,7 @@ export class ClaimProcessor {
       await storage.addThread({
         threadId,
         policyNumber: policyCheck.policyNumber,
-        subject: thread.subject,
+        subject: normalizedThread.messages[0]?.subject || '',
       });
 
       // Check if this thread was previously pending and delete it
@@ -62,9 +62,9 @@ export class ClaimProcessor {
         await storage.deletePendingThread(threadId);
       }
 
-      // Fetch ALL threads for this policy from Gmail (multi-thread aggregation)
+      // Fetch ALL threads for this policy from Gmail using Composio (multi-thread aggregation)
       console.log(`🔍 Fetching all threads for policy: ${policyCheck.policyNumber}`);
-      const allThreads = await gmailClient.fetchThreadsByPolicy(policyCheck.policyNumber);
+      const allThreads = await emailProcessor.fetchThreadsByPolicy(policyCheck.policyNumber);
       
       console.log(`✓ Found ${allThreads.length} total threads for this policy`);
 
@@ -80,7 +80,7 @@ export class ClaimProcessor {
         
         // Add linked threads to aggregation
         for (const pending of linkedPendingThreads) {
-          const pendingThread = pending.threadData as unknown as GmailThread;
+          const pendingThread = pending.threadData as unknown as any;
           allThreads.push(pendingThread);
           
           // Record in threads table
@@ -95,8 +95,8 @@ export class ClaimProcessor {
         }
       }
 
-      // Aggregate all threads and extract claim data
-      const aggregatedJson = gmailClient.threadsToJson(allThreads);
+      // Aggregate all threads and extract claim data using Composio data
+      const aggregatedJson = emailProcessor.threadsToJson(allThreads);
       console.log(`📊 Extracting claim data from ${allThreads.length} aggregated threads...`);
       
       const extracted = await claimExtractor.extractClaimData(aggregatedJson);
