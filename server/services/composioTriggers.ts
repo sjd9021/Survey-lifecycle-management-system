@@ -94,7 +94,7 @@ export class ComposioTriggerService {
 
     console.log(`📧 Gmail webhook received: ${type} (log_id: ${log_id})`);
 
-    if (type === "GMAIL_NEW_GMAIL_MESSAGE") {
+    if (type.toUpperCase() === "GMAIL_NEW_GMAIL_MESSAGE") {
       const messageData = data as GmailNewMessagePayload;
       const threadId = messageData.threadId;
       const subject = messageData.subject || "";
