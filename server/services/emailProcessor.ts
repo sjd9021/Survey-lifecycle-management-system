@@ -41,7 +41,7 @@ export class EmailProcessor {
       }
 
       // The result contains the thread data from Gmail
-      return this.normalizeThread(result.data);
+      return this.normalizeThread(result.data, threadId);
     } catch (error) {
       console.error("Error fetching thread:", error);
       throw new Error(`Failed to fetch thread ${threadId}: ${error}`);
@@ -86,7 +86,7 @@ export class EmailProcessor {
    * Normalize raw Gmail thread data into our structured format
    * Also handles simplified test data format
    */
-  normalizeThread(threadData: any): NormalizedThread {
+  normalizeThread(threadData: any, threadId?: string): NormalizedThread {
     const messages: EmailMessage[] = [];
 
     // Handle case where threadData doesn't have messages array
@@ -163,7 +163,7 @@ export class EmailProcessor {
     }
 
     return {
-      threadId: threadData.id || threadData.threadId || "unknown",
+      threadId: threadId || threadData.id || threadData.threadId || "unknown",
       messages,
     };
   }
