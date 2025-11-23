@@ -4,6 +4,7 @@ const mockClaims: ClaimData[] = [
   {
     id: "1",
     gladstoneRef: "G/1829/25G",
+    policyNumber: "13901027002",
     clientRefs: ["BL MAEU260730677", "PI 9610232-2", "MENAC-193509"],
     notificationDate: new Date("2025-11-14"),
     surveyDate: new Date("2025-11-14"),
@@ -16,6 +17,7 @@ const mockClaims: ClaimData[] = [
   {
     id: "2",
     gladstoneRef: "G/1812/25B",
+    policyNumber: "21-H0965963",
     clientRefs: ["21-H0965963"],
     notificationDate: new Date("2025-11-11"),
     surveyDate: new Date("2025-11-12"),
@@ -28,11 +30,12 @@ const mockClaims: ClaimData[] = [
   {
     id: "3",
     gladstoneRef: "G/1804/25B",
+    policyNumber: "FUJIKURA-2024-088",
     clientRefs: ["A 301630641 CGO"],
     notificationDate: new Date("2025-11-07"),
     surveyDate: new Date("2025-11-10"),
     plaDate: null,
-    status: "OVERDUE",
+    status: "SURVEY_OVERDUE",
     branch: "Mumbai",
     insurer: "MSIG Singapore",
     consignee: "V3 Agencies",

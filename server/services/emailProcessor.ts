@@ -13,6 +13,16 @@ export interface NormalizedThread {
   messages: EmailMessage[];
 }
 
+type GmailMessageSummary = {
+  threadId?: string;
+  id?: string;
+  [key: string]: unknown;
+};
+
+type GmailMessagesData = {
+  messages?: GmailMessageSummary[];
+};
+
 export class EmailProcessor {
   /**
    * Fetch an email thread from Gmail using Composio actions
@@ -72,9 +82,9 @@ export class EmailProcessor {
       });
 
       console.log("Gmail fetch result:", JSON.stringify(result, null, 2));
-      
-      // Handle Composio response structure (may be under result.data or result.response)
-      const messages = result?.data?.messages || result?.response?.messages || [];
+
+      const data = (result?.data as GmailMessagesData) || {};
+      const messages = Array.isArray(data.messages) ? data.messages : [];
       return messages;
     } catch (error) {
       console.error("Error listing messages:", error);
@@ -271,17 +281,21 @@ export class EmailProcessor {
         dangerouslySkipVersionCheck: true,
       });
 
-      const messages = result?.data?.messages || [];
-      const threadIds = new Set<string>();
-      
-      // Extract unique thread IDs
+      const data = (result?.data as GmailMessagesData) || {};
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      const seenThreadIds: Record<string, true> = {};
+      const threadIds: string[] = [];
+
       for (const msg of messages) {
-        if (msg.threadId) {
-          threadIds.add(msg.threadId);
+        const threadId = (msg.threadId as string | undefined) || (msg.id as string | undefined);
+        if (!threadId || seenThreadIds[threadId]) {
+          continue;
         }
+        seenThreadIds[threadId] = true;
+        threadIds.push(threadId);
       }
 
-      console.log(`Found ${threadIds.size} threads for policy ${policyNumber}`);
+      console.log(`Found ${threadIds.length} threads for policy ${policyNumber}`);
 
       // Fetch full details for each unique thread
       const threads: any[] = [];

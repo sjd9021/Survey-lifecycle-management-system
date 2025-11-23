@@ -71,7 +71,7 @@ export default function Dashboard() {
   const claimDetail: ClaimDetails | null = selectedClaim
     ? {
         id: selectedClaim.id,
-        gladstoneRef: selectedClaim.gladstoneRef,
+        gladstoneRef: selectedClaim.gladstoneRef || selectedClaim.policyNumber || "Unidentified Claim",
         clientRefs: selectedClaim.clientRefs || [],
         notificationDate: selectedClaim.notificationReceivedAt
           ? new Date(selectedClaim.notificationReceivedAt)

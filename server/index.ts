@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { composioTriggerService } from "./services/composioTriggers";
 
 const app = express();
 
@@ -60,10 +61,37 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  const isDevelopment = app.get("env") === "development";
+
+  if (isDevelopment) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+  }
+
+  if (isDevelopment) {
+    try {
+      await composioTriggerService.startDevListener();
+    } catch (error) {
+      console.error("Failed to start Composio dev listener:", error);
+    }
+
+    if (composioTriggerService.isDevListenerRunning()) {
+      const shutdownSignals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+      shutdownSignals.forEach((signal) => {
+        process.once(signal, () => {
+          void (async () => {
+            try {
+              await composioTriggerService.stopDevListener();
+            } catch (error) {
+              console.error("Error stopping Composio dev listener:", error);
+            } finally {
+              process.exit(0);
+            }
+          })();
+        });
+      });
+    }
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT

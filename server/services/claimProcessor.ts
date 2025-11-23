@@ -14,12 +14,12 @@ export class ClaimProcessor {
    * 4. Aggregate threads and extract claim data (full LLM call)
    * 5. Check pending_threads for retroactive linking
    */
-  async processNewThread(threadId: string): Promise<Claim | null> {
+  async processNewThread(threadId: string, userId: string = "replit"): Promise<Claim | null> {
     try {
       console.log(`\n📧 Processing new thread: ${threadId}`);
       
       // Fetch the thread from Gmail using Composio
-      const normalizedThread = await emailProcessor.fetchThread(threadId);
+      const normalizedThread = await emailProcessor.fetchThread(threadId, userId);
       if (!normalizedThread) {
         console.error("Failed to fetch thread from Gmail");
         return null;
@@ -64,7 +64,7 @@ export class ClaimProcessor {
 
       // Fetch ALL threads for this policy from Gmail using Composio (multi-thread aggregation)
       console.log(`🔍 Fetching all threads for policy: ${policyCheck.policyNumber}`);
-      const allThreads = await emailProcessor.fetchThreadsByPolicy(policyCheck.policyNumber);
+      const allThreads = await emailProcessor.fetchThreadsByPolicy(policyCheck.policyNumber, userId);
       
       console.log(`✓ Found ${allThreads.length} total threads for this policy`);
 

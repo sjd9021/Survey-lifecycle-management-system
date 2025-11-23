@@ -6,7 +6,8 @@ export default function StatusBadgeExample() {
       <StatusBadge status="NOTIFIED" />
       <StatusBadge status="SURVEY_SCHEDULED" />
       <StatusBadge status="PLA_SENT" />
-      <StatusBadge status="OVERDUE" />
+      <StatusBadge status="SURVEY_OVERDUE" />
+      <StatusBadge status="PLA_OVERDUE" />
     </div>
   );
 }

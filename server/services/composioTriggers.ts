@@ -1,6 +1,9 @@
-import { Composio } from "@composio/core";
+import {
+  Composio,
+  type IncomingTriggerPayload,
+  type TriggerSubscribeParams,
+} from "@composio/core";
 import { claimProcessor } from "./claimProcessor";
-import { emailProcessor } from "./emailProcessor";
 
 /**
  * Composio v3 SDK integration for Gmail triggers
@@ -27,6 +30,8 @@ export interface GmailNewMessagePayload {
 }
 
 export class ComposioTriggerService {
+  private devListenerActive = false;
+
   /**
    * Create a Gmail new message trigger for a specific user
    * Note: User must already have a connected Gmail account in Composio
@@ -65,7 +70,18 @@ export class ComposioTriggerService {
    * Get all active triggers for a user
    */
   async listTriggers(userId: string) {
-    return await composio.triggers.list({ userId });
+    const response = await composio.triggers.listActive();
+    const items = response?.items ?? [];
+
+    return items.filter((item) => {
+      const state = item.state as Record<string, unknown> | undefined;
+      const stateUserId =
+        (state?.userId as string | undefined) ||
+        (state?.user_id as string | undefined) ||
+        (state?.clientUniqueUserId as string | undefined);
+
+      return stateUserId ? stateUserId === userId : true;
+    });
   }
 
   /**
@@ -95,47 +111,81 @@ export class ComposioTriggerService {
     console.log(`📧 Gmail webhook received: ${type} (log_id: ${log_id})`);
 
     if (type.toUpperCase() === "GMAIL_NEW_GMAIL_MESSAGE") {
-      const messageData = data as GmailNewMessagePayload;
-      const threadId = messageData.threadId;
-      const subject = messageData.subject || "";
-      
-      console.log(`  Thread ID: ${threadId}`);
-      console.log(`  Subject: ${subject}`);
-      
-      // Check if this is a claim-related email (basic heuristic)
-      const isClaimEmail = this.isClaimRelatedEmail(messageData);
-      
-      if (!isClaimEmail) {
-        console.log(`⏭️  Skipping non-claim email: ${subject}`);
-        return { status: "skipped", reason: "Not a claim-related email" };
-      }
-
-      if (!threadId) {
-        console.log(`⚠️  No thread ID in webhook payload`);
-        return { status: "error", reason: "Missing thread ID" };
-      }
-
-      // Fetch the full thread using Composio actions
-      try {
-        const threadData = await emailProcessor.fetchThread(threadId);
-        
-        // Process the thread
-        const claim = await claimProcessor.processEmailThread(threadData);
-        
-        if (claim) {
-          console.log(`✅ Processed claim from webhook: ${claim.gladstoneRef}`);
-          return { status: "success", claim };
-        } else {
-          console.log(`⚠️  No claim data extracted from thread ${threadId}`);
-          return { status: "no_claim_found" };
-        }
-      } catch (error) {
-        console.error("Error processing Gmail webhook:", error);
-        throw error;
-      }
+      return this.processGmailTriggerEvent(data as GmailNewMessagePayload, {
+        source: "webhook",
+        triggerId: log_id,
+      });
     }
 
     return { status: "unhandled_trigger_type", type };
+  }
+
+  /**
+   * Start Composio dev listener (WebSocket-based) for local development
+   */
+  async startDevListener(options: { userId?: string; filters?: TriggerSubscribeParams } = {}) {
+    if (this.devListenerActive) {
+      console.log("📡 Composio dev listener already running");
+      return;
+    }
+
+    if (!process.env.COMPOSIO_API_KEY) {
+      console.warn("⚠️  COMPOSIO_API_KEY not configured - cannot start dev listener");
+      return;
+    }
+
+    const userId = options.userId ?? "replit";
+    const filters: TriggerSubscribeParams = {
+      ...(options.filters ?? {}),
+      userId,
+    };
+
+    if (!filters.triggerSlug || filters.triggerSlug.length === 0) {
+      filters.triggerSlug = ["GMAIL_NEW_GMAIL_MESSAGE"];
+    }
+
+    if (!filters.toolkits || filters.toolkits.length === 0) {
+      filters.toolkits = ["gmail"];
+    }
+
+    try {
+      await composio.triggers.subscribe(
+        (incoming) => {
+          void this.handleListenerPayload(incoming).catch((error) => {
+            console.error("Listener event processing error:", error);
+          });
+        },
+        filters,
+      );
+
+      this.devListenerActive = true;
+      console.log(`🛰️  Composio dev listener started (userId=${userId})`);
+    } catch (error) {
+      console.error("Failed to start Composio dev listener:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop Composio dev listener
+   */
+  async stopDevListener() {
+    if (!this.devListenerActive) {
+      return;
+    }
+
+    try {
+      await composio.triggers.unsubscribe();
+      console.log("🛑  Composio dev listener stopped");
+    } catch (error) {
+      console.error("Error stopping Composio dev listener:", error);
+    } finally {
+      this.devListenerActive = false;
+    }
+  }
+
+  isDevListenerRunning() {
+    return this.devListenerActive;
   }
 
   /**
@@ -174,6 +224,131 @@ export class ComposioTriggerService {
     }
     
     return false;
+  }
+
+  private async processGmailTriggerEvent(
+    messageData: GmailNewMessagePayload,
+    context?: { source?: "webhook" | "listener"; triggerId?: string },
+  ) {
+    const sourceLabel = context?.source || "webhook";
+    const threadId = messageData.threadId;
+    const subject = messageData.subject || "";
+
+    console.log(`[${sourceLabel}] Thread ID: ${threadId}`);
+    console.log(`[${sourceLabel}] Subject: ${subject}`);
+
+    if (!threadId) {
+      console.log(`⚠️  No thread ID in ${sourceLabel} payload`);
+      return { status: "error", reason: "Missing thread ID" };
+    }
+
+    const isClaimEmail = this.isClaimRelatedEmail(messageData);
+
+    if (!isClaimEmail) {
+      console.log(`⏭️  [${sourceLabel}] Skipping non-claim email: ${subject}`);
+      return { status: "skipped", reason: "Not a claim-related email" };
+    }
+
+    try {
+      const claim = await claimProcessor.processNewThread(threadId);
+
+      if (claim) {
+        console.log(`✅ Processed claim from ${sourceLabel}: ${claim.gladstoneRef}`);
+        return { status: "success", claim };
+      } else {
+        console.log(`⚠️  No claim data extracted from thread ${threadId}`);
+        return { status: "no_claim_found" };
+      }
+    } catch (error) {
+      console.error(`Error processing Gmail ${sourceLabel}:`, error);
+      throw error;
+    }
+  }
+
+  private async handleListenerPayload(incoming: IncomingTriggerPayload) {
+    const slug = incoming.triggerSlug?.toUpperCase() || "";
+
+    if (slug !== "GMAIL_NEW_GMAIL_MESSAGE") {
+      return;
+    }
+
+    const gmailPayload = this.extractGmailPayloadFromTrigger(incoming);
+
+    if (!gmailPayload) {
+      console.warn("⚠️  Unable to extract Gmail payload from trigger event");
+      return;
+    }
+
+    await this.processGmailTriggerEvent(gmailPayload, {
+      source: "listener",
+      triggerId: incoming.id,
+    });
+  }
+
+  private extractGmailPayloadFromTrigger(
+    incoming: IncomingTriggerPayload,
+  ): GmailNewMessagePayload | null {
+    const candidates = this.collectPayloadCandidates(incoming);
+
+    for (const candidate of candidates) {
+      const normalized = this.normalizeGmailPayload(candidate);
+      if (normalized?.threadId) {
+        return normalized;
+      }
+    }
+
+    return null;
+  }
+
+  private collectPayloadCandidates(
+    incoming: IncomingTriggerPayload,
+  ): Record<string, unknown>[] {
+    const buckets: Record<string, unknown>[] = [];
+
+    const pushCandidate = (value?: Record<string, unknown>) => {
+      if (!value) return;
+      buckets.push(value);
+
+      const nestedPayload = (value as any).payload;
+      if (nestedPayload && typeof nestedPayload === "object") {
+        buckets.push(nestedPayload as Record<string, unknown>);
+      }
+
+      const nestedData = (value as any).data;
+      if (nestedData && typeof nestedData === "object") {
+        buckets.push(nestedData as Record<string, unknown>);
+      }
+    };
+
+    if (incoming.payload && typeof incoming.payload === "object") {
+      pushCandidate(incoming.payload as Record<string, unknown>);
+    }
+
+    if (incoming.originalPayload && typeof incoming.originalPayload === "object") {
+      pushCandidate(incoming.originalPayload as Record<string, unknown>);
+    }
+
+    return buckets;
+  }
+
+  private normalizeGmailPayload(
+    candidate?: Record<string, unknown>,
+  ): GmailNewMessagePayload | null {
+    if (!candidate) {
+      return null;
+    }
+
+    const normalized: GmailNewMessagePayload = {
+      ...(candidate as GmailNewMessagePayload),
+      threadId:
+        (candidate as GmailNewMessagePayload).threadId ||
+        (candidate as { thread_id?: string }).thread_id,
+      messageId:
+        (candidate as GmailNewMessagePayload).messageId ||
+        (candidate as { message_id?: string }).message_id,
+    };
+
+    return normalized.threadId ? normalized : null;
   }
 
   /**

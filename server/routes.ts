@@ -181,7 +181,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Extract unique thread IDs
-      const threadIds = [...new Set(messages.map((msg: any) => msg.threadId))];
+      const seenThreadIds = new Set<string>();
+      const threadIds: string[] = [];
+      for (const msg of messages) {
+        const threadId = msg?.threadId;
+        if (!threadId || seenThreadIds.has(threadId)) {
+          continue;
+        }
+        seenThreadIds.add(threadId);
+        threadIds.push(threadId);
+      }
       console.log(`📂 Processing ${threadIds.length} unique threads...`);
 
       const results = [];
@@ -191,11 +200,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process each thread
       for (const threadId of threadIds) {
         try {
-          console.log(`\n🔄 Fetching thread: ${threadId}`);
-          const thread = await emailProcessor.fetchThread(threadId, userId);
-          
-          // Process the thread through claim extraction
-          const claim = await claimProcessor.processEmailThread(thread);
+          console.log(`\n🔄 Processing thread: ${threadId}`);
+          const claim = await claimProcessor.processNewThread(threadId, userId);
           
           if (claim) {
             results.push({ threadId, claim });
